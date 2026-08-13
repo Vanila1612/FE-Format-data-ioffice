@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Builds and caches
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local uploads and exported reports
+uploads/
+exports/
+Thong_ke_van_ban_iOffice.xlsx
+data/*.db
+data/*.db-*
