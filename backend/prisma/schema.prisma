@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ImportStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DocumentGroup {
+  REPORT_PROPOSAL
+  LETTER_AUTHORIZATION
+  WORK_LETTER
+}
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  passwordHash String
+  displayName  String
+  role         UserRole   @default(USER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  imports      Import[]   @relation("ImportUploader")
+  snapshots    Snapshot[] @relation("SnapshotCreator")
+}
+
+model Import {
+  id               String       @id @default(cuid())
+  originalFileName String
+  storedFileName   String
+  filePath         String
+  fileSize         Int
+  status           ImportStatus @default(UPLOADED)
+  totalRows        Int          @default(0)
+  successRows      Int          @default(0)
+  failedRows       Int          @default(0)
+  uploadedById     String
+  uploadedBy       User         @relation("ImportUploader", fields: [uploadedById], references: [id])
+  createdAt        DateTime     @default(now())
+  completedAt      DateTime?
+  errorMessage     String?
+  documents        Document[]
+  snapshots        Snapshot[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("imports")
+}
+
+model Document {
+  id              String        @id @default(cuid())
+  importId        String
+  import          Import        @relation(fields: [importId], references: [id], onDelete: Cascade)
+  summary         String
+  referenceNumber String
+  signedDocument  String
+  issueDate       DateTime?
+  issuingUnit     String
+  normalizedUnit  String
+  documentGroup   DocumentGroup
+  rawData         Json
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([importId])
+  @@index([referenceNumber])
+  @@index([issuingUnit])
+  @@index([normalizedUnit])
+  @@index([documentGroup])
+  @@index([issueDate])
+  @@map("documents")
+}
+
+model ClassificationRule {
+  id            String        @id @default(cuid())
+  name          String
+  keyword       String
+  documentGroup DocumentGroup
+  priority      Int
+  enabled       Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([enabled, priority])
+  @@map("classification_rules")
+}
+
+model UnitMapping {
+  id             String   @id @default(cuid())
+  sourceName     String   @unique
+  normalizedName String
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([enabled])
+  @@map("unit_mappings")
+}
+
+model RuleVersion {
+  id        String     @id @default(cuid())
+  version   Int        @unique
+  rulesJson Json
+  createdBy String?
+  createdAt DateTime   @default(now())
+  snapshots Snapshot[]
+
+  @@map("rule_versions")
+}
+
+model Snapshot {
+  id             String             @id @default(cuid())
+  name           String
+  importId       String
+  import         Import             @relation(fields: [importId], references: [id])
+  ruleVersionId  String
+  ruleVersion    RuleVersion        @relation(fields: [ruleVersionId], references: [id])
+  mappingVersion Int
+  createdById    String
+  createdBy      User               @relation("SnapshotCreator", fields: [createdById], references: [id])
+  createdAt      DateTime           @default(now())
+  description    String?
+  documents      SnapshotDocument[]
+
+  @@index([importId])
+  @@index([createdAt])
+  @@map("snapshots")
+}
+
+model SnapshotDocument {
+  id                 String        @id @default(cuid())
+  snapshotId         String
+  snapshot           Snapshot      @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  originalDocumentId String
+  summary            String
+  referenceNumber    String
+  signedDocument     String
+  issueDate          DateTime?
+  issuingUnit        String
+  normalizedUnit     String
+  documentGroup      DocumentGroup
+  rawData            Json
+
+  @@index([snapshotId])
+  @@index([originalDocumentId])
+  @@index([documentGroup])
+  @@map("snapshot_documents")
+}

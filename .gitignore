@@ -28,6 +28,12 @@ pnpm-debug.log*
 # Local uploads and exported reports
 uploads/
 exports/
+storage/uploads/*
+storage/exports/*
+storage/snapshots/*
+!storage/uploads/.gitkeep
+!storage/exports/.gitkeep
+!storage/snapshots/.gitkeep
 Thong_ke_van_ban_iOffice.xlsx
 data/*.db
 data/*.db-*

@@ -1,25 +1,27 @@
 {
-  "name": "ioffice-van-ban-dashboard",
+  "name": "ioffice-web-application",
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "concurrently \"vite\" \"node server/index.js\"",
-    "build": "vite build",
-    "start": "node server/index.js",
-    "test": "node --check server/index.js"
-  },
-  "dependencies": {
-    "better-sqlite3": "^12.8.0",
-    "express": "^5.1.0",
-    "multer": "^2.0.2",
-    "xlsx": "^0.18.5"
+    "dev": "concurrently \"pnpm --filter @ioffice/backend dev\" \"pnpm --filter @ioffice/frontend dev\"",
+    "build": "pnpm --filter @ioffice/backend build && pnpm --filter @ioffice/frontend build",
+    "start": "pnpm --filter @ioffice/backend start",
+    "test": "pnpm --filter @ioffice/backend test && pnpm --filter @ioffice/frontend test",
+    "lint": "pnpm --filter @ioffice/backend typecheck && pnpm --filter @ioffice/frontend typecheck",
+    "prisma:generate": "pnpm --filter @ioffice/backend prisma:generate",
+    "prisma:migrate": "pnpm --filter @ioffice/backend prisma:migrate",
+    "seed": "pnpm --filter @ioffice/backend seed"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
-    "concurrently": "^9.2.1",
-    "vite": "^7.1.7",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "concurrently": "^9.2.1"
+  },
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22"
   }
 }

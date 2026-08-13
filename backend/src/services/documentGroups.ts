@@ -1,0 +1,18 @@
+import { DocumentGroup } from '@prisma/client';
+
+export const documentGroupLabels: Record<DocumentGroup, string> = {
+  REPORT_PROPOSAL: 'Báo cáo / Tờ trình',
+  LETTER_AUTHORIZATION: 'Công văn / Ủy quyền',
+  WORK_LETTER: 'Thư công tác'
+};
+
+export function parseDocumentGroup(value: string): DocumentGroup {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes('báo cáo') || normalized.includes('bao cao') || normalized.includes('tờ trình') || normalized.includes('to trinh')) {
+    return DocumentGroup.REPORT_PROPOSAL;
+  }
+  if (normalized.includes('công văn') || normalized.includes('cong van') || normalized.includes('ủy quyền') || normalized.includes('uy quyen')) {
+    return DocumentGroup.LETTER_AUTHORIZATION;
+  }
+  return DocumentGroup.WORK_LETTER;
+}
