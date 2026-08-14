@@ -26,6 +26,19 @@ describe('excelService', () => {
     expect(parsed.preview[0]['Số ký hiệu']).toBe('01/BC-ALCO');
   });
 
+  it('excludes the numbered description row below an iOffice header', () => {
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['STT', 'Trích yếu', 'Số ký hiệu', 'Văn bản ký số', 'Ngày ban hành', 'Đơn vị ban hành'],
+      ['(1)', '(2)', '(3)', '(4)', '(5)', '(6)'],
+      [1, 'Văn bản thứ nhất', '01/BC-ALCO', 'Đã ký số', '01/08/2026', 'ALCO'],
+      [2, 'Văn bản thứ hai', '02/CV-ALCO', 'Không ký số', '02/08/2026', 'ALCO']
+    ]);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'iOffice');
+    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }) as Buffer;
+    expect(parseWorkbook(buffer).rows).toHaveLength(2);
+  });
+
   it('returns a clear error when required columns are missing', () => {
     expect(() => parseWorkbook(workbookBuffer([{ 'Trích yếu': 'Missing columns' }])))
       .toThrowError(AppError);

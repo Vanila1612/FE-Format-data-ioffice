@@ -4,17 +4,17 @@ Internal web application for uploading Excel exports from iOffice, validating an
 
 ## Features
 
-- React + Vite frontend with login, sidebar layout, dashboard, import, documents, reports, rules, unit mappings, import history, snapshots, and settings pages.
+- React + Vite frontend with login, dashboard, import, documents, reports, rules, unit mappings, user/role management, import history, and saved results.
 - Express + TypeScript backend with REST APIs, centralized error handling, upload validation, JWT auth, and admin-only rule/mapping management.
-- PostgreSQL + Prisma schema, migration, seed data, indexes, relations, and transactions for import and snapshot creation.
+- MongoDB + Prisma schema, seed data, indexes and relations for import and snapshot creation.
 - Server-side Excel upload and parsing with SheetJS.
 - Required Excel header validation.
 - Backend classification engine with editable rules, priority, enabled status, and NHNo/Agribank special handling.
 - Server-side document search, filter, sort, and pagination.
 - Excel export for reports/import documents and snapshots.
-- Immutable snapshot storage in `snapshot_documents`.
-- Docker Compose for frontend, backend, and PostgreSQL with persistent volumes.
-- Backup/restore scripts for PostgreSQL plus uploaded/snapshot storage.
+- Saved statistical results include both the output table and immutable source-document copies in `snapshot_documents`.
+- Admin-only deletion for individual documents, full imports, and related saved results.
+- Docker Compose for frontend, backend, and MongoDB with persistent volumes.
 
 ## Architecture
 
@@ -22,7 +22,7 @@ Internal web application for uploading Excel exports from iOffice, validating an
 frontend/ React 19 + Vite + TypeScript
     -> REST /api
 backend/ Express + TypeScript + Prisma
-    -> PostgreSQL
+    -> MongoDB
     -> storage/uploads, storage/exports, storage/snapshots
 ```
 
@@ -30,7 +30,7 @@ backend/ Express + TypeScript + Prisma
 
 - Node.js 22+
 - pnpm
-- Docker Desktop / Docker Compose for PostgreSQL and container deployment
+- Docker Desktop / Docker Compose for MongoDB and container deployment
 
 ## Environment
 
@@ -39,7 +39,7 @@ Copy `.env.example` to `.env` for local development if you want custom values.
 Important variables:
 
 ```env
-DATABASE_URL=postgresql://ioffice:ioffice@localhost:5432/ioffice
+DATABASE_URL=mongodb://ioffice:ioffice@localhost:27018/ioffice?authSource=admin&replicaSet=rs0&directConnection=true
 JWT_SECRET=change-me-to-a-long-random-secret
 CORS_ORIGIN=http://localhost:5173
 MAX_UPLOAD_SIZE_MB=50
@@ -55,18 +55,27 @@ Install dependencies:
 pnpm install
 ```
 
-Start PostgreSQL:
+Start MongoDB:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d mongo
 ```
 
-Run migrations and seed:
+Sync the MongoDB schema and seed:
 
 ```bash
-pnpm prisma:migrate
+pnpm prisma:push
 pnpm seed
 ```
+
+After pulling the reporting/snapshot update, run the schema sync again:
+
+```bash
+pnpm prisma:generate
+pnpm prisma:push
+```
+
+For an older import that was deduplicated, open **Import History** and select **Đọc lại file gốc**. The system rebuilds that import from its saved Excel file, preserving each source-document row without asking the user to upload it again.
 
 Start frontend and backend:
 
@@ -77,26 +86,6 @@ pnpm dev
 Frontend: `http://localhost:5173`
 
 Backend health: `http://localhost:3001/api/health`
-
-## Local Import Without Database
-
-For the current quick-check workflow, you can validate the Excel import and see normalized/classified results without PostgreSQL or backend storage:
-
-```bash
-pnpm --filter @ioffice/frontend dev
-```
-
-Open `http://localhost:5173`, choose `Dùng chế độ local`, then go to Import and select an `.xlsx` or `.xls` file.
-
-This mode:
-
-- reads the Excel file in the browser,
-- validates required columns,
-- trims and normalizes document fields,
-- applies the default classification rules,
-- applies the NHNo/Agribank special case,
-- shows the normalized result table,
-- does not save anything to the database.
 
 Default dev login:
 
@@ -120,7 +109,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Persistent volumes:
 
-- `postgres_data`
+- `mongo_data`
 - `app_storage`
 
 ## Excel Format
@@ -218,8 +207,15 @@ Main endpoints:
 - `GET /api/imports/:id`
 - `GET /api/imports/:id/documents`
 - `GET /api/imports/:id/export`
+- `POST /api/imports/:id/reprocess`
+- `DELETE /api/imports/:id`
 - `GET /api/documents`
 - `GET /api/documents/:id`
+- `DELETE /api/documents/:id`
+- `GET /api/users`
+- `POST /api/users`
+- `PUT /api/users/:id`
+- `DELETE /api/users/:id`
 - `GET /api/rules`
 - `POST /api/rules`
 - `PUT /api/rules/:id`
@@ -231,8 +227,10 @@ Main endpoints:
 - `GET /api/snapshots`
 - `POST /api/snapshots`
 - `GET /api/snapshots/:id`
+- `GET /api/snapshots/:id/report`
 - `GET /api/snapshots/:id/documents`
 - `GET /api/snapshots/:id/export`
+- `DELETE /api/snapshots/:id`
 - `GET /api/snapshots/compare?leftId=...&rightId=...`
 - `GET /api/reports/summary`
 - `GET /api/reports/export`
@@ -247,7 +245,7 @@ scripts/backup.sh
 Output:
 
 ```text
-backup/<timestamp>/database.sql
+backup/<timestamp>/database.archive
 backup/<timestamp>/storage.tar.gz
 ```
 
@@ -257,7 +255,7 @@ backup/<timestamp>/storage.tar.gz
 scripts/restore.sh backup/<timestamp>
 ```
 
-Restore replaces storage volume contents and restores the PostgreSQL dump.
+Restore replaces storage volume contents and restores the MongoDB database archive.
 
 ## Testing
 

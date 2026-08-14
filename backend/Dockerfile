@@ -29,4 +29,4 @@ COPY --from=build /app/backend/dist ./backend/dist
 COPY --from=build /app/backend/prisma ./backend/prisma
 WORKDIR /app/backend
 EXPOSE 3001
-CMD ["sh", "-c", "pnpm prisma:migrate && pnpm seed && node dist/src/server.js"]
+CMD ["sh", "-c", "pnpm prisma:push && pnpm seed && node dist/src/server.js"]

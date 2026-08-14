@@ -29,10 +29,6 @@ export type LocalImportResult = {
   boardRows: ResultBoardRow[];
 };
 
-export type StoredLocalImport = LocalImportResult & {
-  fileName: string;
-  importedAt: string;
-};
 
 export type ResultBoardRow = {
   stt: number;
@@ -51,14 +47,13 @@ export type ResultBoardRow = {
   totalRate: number;
 };
 
-const localImportStorageKey = 'ioffice.localImport';
 const unitNameMap: Record<string, string> = {
   'trụ sở chính': 'Trụ sở chính',
   'tru so chinh': 'Trụ sở chính',
   'trụ sở chính agribank': 'Trụ sở chính',
   'văn phòng trụ sở chính': 'Trụ sở chính',
-  'ban khách hàng doanh nghiệp': 'Ban Khách hàng Doanh Nghiệp',
-  'ban khach hang doanh nghiep': 'Ban Khách hàng Doanh Nghiệp',
+  'ban khách hàng doanh nghiệp': 'Ban Khách hàng doanh nghiệp',
+  'ban khach hang doanh nghiep': 'Ban Khách hàng doanh nghiệp',
   'ban khách hàng cá nhân': 'Ban Khách hàng cá nhân',
   'ban khach hang ca nhan': 'Ban Khách hàng cá nhân',
   'trung tâm công nghệ thông tin': 'TTCNTT',
@@ -84,14 +79,44 @@ const unitNameMap: Record<string, string> = {
   'dctc': 'Ban Định chế tài chính'
 };
 
+const requiredUnitMap: Record<string, string> = {
+  'ban kiem soat': 'Ban Kiểm soát',
+  'dang uy agribank': 'Đảng ủy Agribank',
+  'tru so chinh': 'Trụ sở chính',
+  'tru so chinh agribank': 'Trụ sở chính',
+  'van phong tru so chinh': 'Trụ sở chính',
+  'cong doan co so trung tam the': 'Trung tâm Thẻ',
+  'chi bo trung tam pcrt': 'Trung tâm Phòng, chống rửa tiền',
+  'ttkh': 'Trung tâm Dịch vụ thanh toán và kiều hối',
+  'phong tong hop': 'Trụ sở chính',
+  'kiem toan noi bo ban kiem soat': 'Ban Kiểm soát'
+};
+
+const nhnoSuffixUnitMap: Record<string, string> = {
+  'qldt': 'Ban Quản lý đầu tư nội ngành', 'ttkh': 'Trung tâm Dịch vụ thanh toán và kiều hối', 'alco': 'TRUNG TÂM QUẢN LÝ NỢ CVĐ',
+  'khcn': 'Ban Khách hàng cá nhân', 'tkth': 'Ban Thư ký Tổng hợp', 'dtcph': 'Ban Đầu tư và Cổ phần hóa',
+  'kdvtt': 'Trung tâm Kinh doanh Vốn và Tiền tệ', 'tttt': 'Trung tâm Thanh toán', 'vp': 'Trụ sở chính',
+  'qlxd': 'Ban QL Dự án ĐTXD khu vực', 'th': 'Ban QL Dự án ĐTXD khu vực', 'tcns': 'Ban Tổ chức nhân sự',
+  'cskh': 'TRUNG TÂM CHĂM SÓC KHÁCH HÀNG', 'rrtd': 'Trung tâm QLRRTD', 'cd': 'Cơ quan Công đoàn',
+  'nhs': 'Ban Ngân hàng số', 'cn': 'Ban Công nghệ', 'dctc': 'Ban Định chế tài chính',
+  'ktnb': 'Ban Kiểm tra, giám sát nội bộ', 'tdtcb': 'Trường ĐTCB', 'tttm': 'Trung Tâm Tài Trợ Thương Mại', 'bqle3': 'Ban QLE3'
+};
+
 const requiredHeaders = ['Trích yếu', 'Số ký hiệu', 'Văn bản ký số', 'Ngày ban hành', 'Đơn vị ban hành'];
 
 function clean(value: unknown) {
   return String(value ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
 }
 
+function comparisonKey(value: string) {
+  return clean(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function normalizeUnitName(value: unknown) {
   const text = clean(value);
+  if (/^ttt(?:\s|$)/i.test(text) || /^ttt[._-]/i.test(text)) return 'Trung tâm Thẻ';
+  const required = requiredUnitMap[comparisonKey(text)];
+  if (required) return required;
   const key = text.toLowerCase();
   return unitNameMap[key] || text;
 }
@@ -127,26 +152,26 @@ function isSigned(value: unknown) {
 }
 
 function hasToken(referenceNumber: string, keyword: string) {
-  const parts = clean(referenceNumber).split(/[^0-9a-zA-ZÀ-ỹ]+/u).map((part) => part.toLowerCase());
-  return parts.includes(keyword.toLowerCase());
+  if (/^(BC|TTr)$/i.test(keyword)) return new RegExp(`(^|[^a-zA-ZÀ-ỹ])${keyword}`, 'iu').test(clean(referenceNumber));
+  return clean(referenceNumber).toLowerCase().includes(keyword.toLowerCase());
 }
 
-function isAgribankUnit(unit: string) {
-  const text = clean(unit).toLowerCase();
-  return text.includes('nhno') ||
-    text.includes('agribank') ||
-    text.includes('ngân hàng nông nghiệp và phát triển nông thôn việt nam') ||
-    text.includes('ngan hang nong nghiep va phat trien nong thon viet nam');
+function isNhnoUnit(unit: string) {
+  const key = comparisonKey(unit);
+  return ['nhno', 'nhno lh', 'ngan hang nong nghiep va phat trien nong thon viet nam'].includes(key);
 }
 
-function unitFromReference(referenceNumber: string) {
+function normalizeNhnoSuffix(referenceNumber: string) {
   const parts = clean(referenceNumber).split('-').map(clean).filter(Boolean);
-  return parts.length > 1 ? parts.at(-1) || '' : '';
+  const suffix = parts.length > 1 ? parts.at(-1) || '' : '';
+  const key = comparisonKey(suffix);
+  if (/^ttt(?: \d+)?$/.test(key)) return 'Trung tâm Thẻ';
+  return nhnoSuffixUnitMap[key] || '';
 }
 
-function classify(referenceNumber: string, issuingUnit: string): { group: DocumentGroup; unitOverride?: string } {
-  if (isAgribankUnit(issuingUnit)) {
-    return { group: 'LETTER_AUTHORIZATION', unitOverride: normalizeUnitName(unitFromReference(referenceNumber) || 'Trụ sở chính') };
+function classify(referenceNumber: string, issuingUnit: string): { group: DocumentGroup; normalizedUnit?: string } {
+  if (isNhnoUnit(issuingUnit)) {
+    return { group: 'LETTER_AUTHORIZATION', normalizedUnit: normalizeNhnoSuffix(referenceNumber) };
   }
   if (hasToken(referenceNumber, 'BC') || hasToken(referenceNumber, 'TTr')) return { group: 'REPORT_PROPOSAL' };
   if (hasToken(referenceNumber, 'CV') || hasToken(referenceNumber, 'UQ')) return { group: 'LETTER_AUTHORIZATION' };
@@ -173,8 +198,10 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
   }
 
   const headers = matrix[headerIndex].map(clean);
+  const sttIndex = headers.findIndex((header) => headerKey(header) === 'stt');
   const documents = matrix.slice(headerIndex + 1)
     .filter((row) => row.some((cell) => clean(cell)))
+    .filter((row) => sttIndex < 0 || Number.isFinite(Number(row[sttIndex])))
     .map((row, index) => {
       const rawData = Object.fromEntries(headers.map((header, cellIndex) => [header, row[cellIndex]]));
       const summary = clean(rawData['Trích yếu']);
@@ -189,15 +216,16 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
         signedDocument,
         issueDate: formatExcelDate(rawData['Ngày ban hành']),
         issuingUnit,
-        normalizedUnit: classified.unitOverride || normalizeUnitName(issuingUnit),
+        normalizedUnit: classified.normalizedUnit ?? normalizeUnitName(issuingUnit),
         documentGroup: classified.group,
         rawData
       };
     });
 
-  const signed = documents.filter((document) => isSigned(document.signedDocument)).length;
-  const total = documents.length;
-  const dates = documents.map((document) => document.issueDate).filter(Boolean).sort();
+  const reportableDocuments = documents.filter((document) => document.normalizedUnit || !isNhnoUnit(document.issuingUnit));
+  const signed = reportableDocuments.filter((document) => isSigned(document.signedDocument)).length;
+  const total = reportableDocuments.length;
+  const dates = reportableDocuments.map((document) => document.issueDate).filter(Boolean).sort();
   return {
     documents,
     missingColumns: [],
@@ -211,56 +239,10 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
       from: dates[0] || '',
       to: dates.at(-1) || ''
     },
-    boardRows: buildResultBoard(documents)
+    boardRows: buildResultBoard(reportableDocuments)
   };
 }
 
-export function saveLocalImport(fileName: string, result: LocalImportResult) {
-  const stored: StoredLocalImport = {
-    ...result,
-    fileName,
-    importedAt: new Date().toISOString()
-  };
-  localStorage.setItem(localImportStorageKey, JSON.stringify(stored));
-}
-
-export function loadLocalImport(): StoredLocalImport | null {
-  const raw = localStorage.getItem(localImportStorageKey);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as StoredLocalImport;
-  } catch {
-    localStorage.removeItem(localImportStorageKey);
-    return null;
-  }
-}
-
-export function clearLocalImport() {
-  localStorage.removeItem(localImportStorageKey);
-}
-
-export function localDocumentsByUnit(documents: LocalDocument[]) {
-  const units = new Map<string, { unit: string; total: number; signed: number; unsigned: number; signRate: number }>();
-  for (const document of documents) {
-    const unit = document.normalizedUnit || document.issuingUnit || 'Không rõ';
-    if (!units.has(unit)) units.set(unit, { unit, total: 0, signed: 0, unsigned: 0, signRate: 0 });
-    const row = units.get(unit)!;
-    row.total += 1;
-    if (isSigned(document.signedDocument)) row.signed += 1;
-  }
-  return [...units.values()].map((row) => ({
-    ...row,
-    unsigned: row.total - row.signed,
-    signRate: row.total ? Number(((row.signed / row.total) * 100).toFixed(1)) : 0
-  })).sort((a, b) => b.total - a.total);
-}
-
-export function localDocumentsByGroup(documents: LocalDocument[]) {
-  return documents.reduce<Record<DocumentGroup, number>>((acc, document) => {
-    acc[document.documentGroup] += 1;
-    return acc;
-  }, { REPORT_PROPOSAL: 0, LETTER_AUTHORIZATION: 0, WORK_LETTER: 0 });
-}
 
 export function buildResultBoard(documents: LocalDocument[]): ResultBoardRow[] {
   const rows = new Map<string, Omit<ResultBoardRow, 'stt' | 'reportRate' | 'letterRate' | 'workRate' | 'totalRate'>>();

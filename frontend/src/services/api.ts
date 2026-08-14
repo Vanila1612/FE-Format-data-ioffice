@@ -25,7 +25,17 @@ export function unwrap<T>(response: { data: ApiResponse<T> }): T {
   return response.data.data;
 }
 
-export function downloadUrl(path: string) {
-  const base = import.meta.env.VITE_API_BASE_URL || '/api';
-  return `${base}${path}`;
+export async function downloadFile(path: string, fallbackName = 'ioffice-export.xlsx') {
+  const response = await api.get<Blob>(path, { responseType: 'blob' });
+  const contentDisposition = String(response.headers['content-disposition'] || '');
+  const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+  const fileName = match?.[1] || fallbackName;
+  const url = URL.createObjectURL(new Blob([response.data], { type: String(response.headers['content-type'] || 'application/octet-stream') }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

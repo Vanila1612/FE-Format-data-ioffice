@@ -1,9 +1,10 @@
-import { DocumentGroup, type ClassificationRule } from '@prisma/client';
+import type { ClassificationRule } from '@prisma/client';
 import { normalizeText } from './normalizationService.js';
+import { DocumentGroup, type DocumentGroup as DocumentGroupValue } from './documentGroups.js';
 
-const AGRIBANK_NAMES = [
+const NHNO_ISSUING_UNITS = [
   'NHNo',
-  'Agribank',
+  'NHNo.LH',
   'Ngân hàng Nông nghiệp và Phát triển nông thôn Việt Nam',
   'Ngan hang Nong nghiep va Phat trien nong thon Viet Nam'
 ];
@@ -15,10 +16,11 @@ export type ClassificationInput = {
 };
 
 export type ClassificationResult = {
-  documentGroup: DocumentGroup;
+  documentGroup: DocumentGroupValue;
   normalizedUnit: string;
   matchedRuleId: string | null;
   matchedRuleName: string;
+  useReferenceSuffix: boolean;
 };
 
 function containsInsensitive(source: string, keyword: string): boolean {
@@ -26,34 +28,41 @@ function containsInsensitive(source: string, keyword: string): boolean {
 }
 
 function referenceContainsKeyword(referenceNumber: string, keyword: string): boolean {
-  const normalizedKeyword = normalizeText(keyword).toLowerCase();
-  return normalizeText(referenceNumber)
-    .split(/[^0-9a-zA-ZÀ-ỹ]+/u)
-    .map((part) => part.toLowerCase())
-    .some((part) => part === normalizedKeyword);
+  const normalizedKeyword = normalizeText(keyword);
+  // BC/TTr must not be matched inside a unit suffix such as "ABC". The
+  // workbook also contains compact forms (for example "2694TTr"), so a
+  // non-letter prefix is accepted. CV/UQ deliberately remain substring
+  // matches to cover formats such as "GUQ" used in the manual workbook.
+  if (/^(BC|TTr)$/i.test(normalizedKeyword)) {
+    const escaped = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-zA-ZÀ-ỹ])${escaped}`, 'iu').test(normalizeText(referenceNumber));
+  }
+  return containsInsensitive(referenceNumber, normalizedKeyword);
 }
 
-export function isAgribankSpecialCase(input: ClassificationInput): boolean {
-  return AGRIBANK_NAMES.some((name) => containsInsensitive(input.issuingUnit, name));
+function issuerKey(value: string): string {
+  return normalizeText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-export function unitFromReference(referenceNumber: string): string | null {
-  const parts = normalizeText(referenceNumber).split('-').map(normalizeText).filter(Boolean);
-  return parts.length > 1 ? parts.at(-1) || null : null;
+export function isNhnoSpecialCase(input: ClassificationInput): boolean {
+  const issuingUnit = issuerKey(input.issuingUnit);
+  return NHNO_ISSUING_UNITS.some((name) => issuerKey(name) === issuingUnit);
 }
 
 export function classifyDocument(input: ClassificationInput, rules: Pick<ClassificationRule, 'id' | 'name' | 'keyword' | 'documentGroup' | 'priority' | 'enabled'>[]): ClassificationResult {
-  if (isAgribankSpecialCase(input)) {
+  if (isNhnoSpecialCase(input)) {
     return {
       documentGroup: DocumentGroup.LETTER_AUTHORIZATION,
-      normalizedUnit: unitFromReference(input.referenceNumber) || input.normalizedUnit || 'Trụ sở chính',
+      // The import service resolves the approved reference suffix to its
+      // reporting unit after this classification step.
+      normalizedUnit: input.normalizedUnit,
       matchedRuleId: null,
-      matchedRuleName: 'Agribank/NHNo special case'
+      matchedRuleName: 'NHNo special case',
+      useReferenceSuffix: true
     };
   }
 
   const match = [...rules]
-    .filter((rule) => rule.enabled)
     .sort((a, b) => a.priority - b.priority || a.keyword.localeCompare(b.keyword, 'vi'))
     .find((rule) => referenceContainsKeyword(input.referenceNumber, rule.keyword));
 
@@ -62,7 +71,8 @@ export function classifyDocument(input: ClassificationInput, rules: Pick<Classif
       documentGroup: match.documentGroup,
       normalizedUnit: input.normalizedUnit,
       matchedRuleId: match.id,
-      matchedRuleName: match.name
+      matchedRuleName: match.name,
+      useReferenceSuffix: false
     };
   }
 
@@ -70,6 +80,7 @@ export function classifyDocument(input: ClassificationInput, rules: Pick<Classif
     documentGroup: DocumentGroup.WORK_LETTER,
     normalizedUnit: input.normalizedUnit,
     matchedRuleId: null,
-    matchedRuleName: 'Default work letter'
+    matchedRuleName: 'Default work letter',
+    useReferenceSuffix: false
   };
 }

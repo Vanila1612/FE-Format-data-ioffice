@@ -1,13 +1,17 @@
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CheckCircle2, FileUp, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { api, unwrap } from '../services/api';
 import { groupLabels, numberText } from '../utils/format';
-import { clearLocalImport, parseLocalExcel, saveLocalImport, type LocalImportResult, type ResultBoardRow } from '../utils/localImport';
+import { parseLocalExcel, type LocalImportResult, type ResultBoardRow } from '../utils/localImport';
 
 export function ImportPage() {
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<LocalImportResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('ALL');
 
@@ -37,7 +41,6 @@ export function ImportPage() {
       if (parsed.missingColumns.length) {
         toast.error(`Thiếu cột bắt buộc: ${parsed.missingColumns.join(', ')}`);
       } else {
-        saveLocalImport(nextFile.name, parsed);
         toast.success(`Đã chuẩn hóa ${parsed.documents.length} dòng`);
       }
     } catch (error) {
@@ -51,9 +54,24 @@ export function ImportPage() {
   function reset() {
     setFile(null);
     setResult(null);
-    clearLocalImport();
     setQuery('');
     setGroup('ALL');
+  }
+
+  async function saveToDatabase() {
+    if (!file || !result || result.missingColumns.length) return;
+    setSaving(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const saved = await unwrap<{ import: { id: string }; documentsImported: number; replacedRows: number }>(await api.post('/imports', form));
+      toast.success(`Đã lưu ${saved.documentsImported} dòng văn bản`);
+      navigate(`/documents?importId=${saved.import.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể lưu dữ liệu vào cơ sở dữ liệu');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return <section className="page-stack">
@@ -61,14 +79,14 @@ export function ImportPage() {
       <input type="file" accept=".xlsx,.xls" onChange={selectFile} />
       <FileUp size={34} />
       <strong>{file ? file.name : 'Chọn hoặc kéo thả file Excel'}</strong>
-      <span>Chế độ local: đọc file, chuẩn hóa, phân loại và tổng hợp theo mẫu 0308; chưa lưu database.</span>
+      <span>Đọc file, chuẩn hóa và kiểm tra trước khi lưu vào hệ thống.</span>
     </label>
 
     {file && <div className="panel file-info">
       <CheckCircle2 size={18} />
       <span>{file.name}</span>
       <b>{Math.round(file.size / 1024)} KB</b>
-      <button className="secondary" onClick={reset} aria-label="Reset import"><RotateCcw size={16} /> Reset</button>
+      <button className="secondary" onClick={reset} aria-label="Làm mới dữ liệu nhập"><RotateCcw size={16} /> Làm mới</button>
     </div>}
 
     {loading && <div className="panel">Đang đọc và chuẩn hóa file Excel</div>}
@@ -78,7 +96,7 @@ export function ImportPage() {
       <span>{result.missingColumns.join(', ')}</span>
     </div> : null}
 
-    {result && !result.missingColumns.length && <LocalResult result={result} rows={rows} query={query} setQuery={setQuery} group={group} setGroup={setGroup} />}
+    {result && !result.missingColumns.length && <><div className="toolbar"><button disabled={saving} onClick={saveToDatabase}>{saving ? 'Đang lưu dữ liệu…' : 'Lưu vào hệ thống'}</button><span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span></div><LocalResult result={result} rows={rows} query={query} setQuery={setQuery} group={group} setGroup={setGroup} /></>}
   </section>;
 }
 

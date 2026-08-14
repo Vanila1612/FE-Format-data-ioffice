@@ -1,11 +1,10 @@
 import { FormEvent, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../services/auth';
 
 export function LoginPage() {
-  const { user, login, useLocalMode } = useAuth();
-  const navigate = useNavigate();
+  const { user, login } = useAuth();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('admin123456');
   const [loading, setLoading] = useState(false);
@@ -32,7 +31,6 @@ export function LoginPage() {
       <label>Tài khoản<input value={username} onChange={(event) => setUsername(event.target.value)} /></label>
       <label>Mật khẩu<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
       <button disabled={loading}>{loading ? 'Đang đăng nhập' : 'Đăng nhập'}</button>
-      <button type="button" className="secondary" onClick={() => { useLocalMode(); navigate('/import'); }}>Dùng chế độ local</button>
     </form>
   </div>;
 }

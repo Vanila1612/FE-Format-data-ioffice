@@ -1,9 +1,8 @@
-import { DocumentGroup } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 import { AppError } from '../utils/appError.js';
 import { documentGroupLabels } from './documentGroups.js';
 import { buildWorkbook } from './excelService.js';
-import { buildDocumentWhere, summary, type DocumentFilters } from './reportService.js';
+import { buildDocumentWhere, summary, summaryFromDocuments, type DocumentFilters, type ResultBoardRow } from './reportService.js';
 
 function formatDate(value: Date | null) {
   return value ? value.toISOString().slice(0, 10) : '';
@@ -33,7 +32,7 @@ export async function exportDocuments(filters: DocumentFilters) {
       }))
     },
     {
-      name: 'Documents',
+      name: 'Văn bản',
       rows: documents.map((document, index) => ({
         STT: index + 1,
         'Trích yếu': document.summary,
@@ -55,19 +54,24 @@ export async function exportSnapshot(snapshotId: string) {
   });
   if (!snapshot) throw new AppError(404, 'SNAPSHOT_NOT_FOUND', 'Snapshot not found');
 
+  const report = snapshot.reportJson ? snapshot.reportJson as unknown as Awaited<ReturnType<typeof summary>> : summaryFromDocuments(snapshot.documents);
   return buildWorkbook([
     {
-      name: 'Snapshot',
+      name: 'Thông tin kết quả',
       rows: [{
-        Name: snapshot.name,
-        Import: snapshot.import.originalFileName,
-        'Rule version': snapshot.ruleVersion.version,
-        'Mapping version': snapshot.mappingVersion,
-        'Created at': snapshot.createdAt.toISOString()
+        'Tên kết quả': snapshot.name,
+        'Nguồn dữ liệu': snapshot.import?.originalFileName || 'Nhiều lần import',
+        'Phiên bản quy tắc': snapshot.ruleVersion.version,
+        'Phiên bản chuẩn hóa': snapshot.mappingVersion,
+        'Thời điểm lưu': snapshot.createdAt.toISOString()
       }]
     },
     {
-      name: 'Documents',
+      name: 'Kết quả thống kê',
+      rows: resultBoardRows(report.boardRows)
+    },
+    {
+      name: 'Văn bản',
       rows: snapshot.documents.map((document, index) => ({
         STT: index + 1,
         'Trích yếu': document.summary,
@@ -76,8 +80,27 @@ export async function exportSnapshot(snapshotId: string) {
         'Ngày ban hành': formatDate(document.issueDate),
         'Đơn vị ban hành': document.issuingUnit,
         'Đơn vị chuẩn hóa': document.normalizedUnit,
-        'Nhóm văn bản': documentGroupLabels[document.documentGroup as DocumentGroup]
+        'Nhóm văn bản': documentGroupLabels[document.documentGroup]
       }))
     }
   ]);
+}
+
+function resultBoardRows(rows: ResultBoardRow[]) {
+  return rows.map((row) => ({
+    STT: row.stt,
+    'Đơn vị': row.unit,
+    'BC/TTr - Đã ký': row.reportSigned,
+    'BC/TTr - Tổng': row.reportTotal,
+    'BC/TTr - Tỷ lệ': `${row.reportRate}%`,
+    'CV/UQ - Đã ký': row.letterSigned,
+    'CV/UQ - Tổng': row.letterTotal,
+    'CV/UQ - Tỷ lệ': `${row.letterRate}%`,
+    'Thư công tác - Đã ký': row.workSigned,
+    'Thư công tác - Tổng': row.workTotal,
+    'Thư công tác - Tỷ lệ': `${row.workRate}%`,
+    'Tổng đã ký': row.totalSigned,
+    'Tổng văn bản': row.totalDocuments,
+    'Tỷ lệ ký': `${row.totalRate}%`
+  }));
 }

@@ -1,4 +1,10 @@
-import { DocumentGroup } from '@prisma/client';
+export const DocumentGroup = {
+  REPORT_PROPOSAL: 'REPORT_PROPOSAL',
+  LETTER_AUTHORIZATION: 'LETTER_AUTHORIZATION',
+  WORK_LETTER: 'WORK_LETTER'
+} as const;
+
+export type DocumentGroup = typeof DocumentGroup[keyof typeof DocumentGroup];
 
 export const documentGroupLabels: Record<DocumentGroup, string> = {
   REPORT_PROPOSAL: 'Báo cáo / Tờ trình',

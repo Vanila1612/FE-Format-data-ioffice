@@ -1,29 +1,29 @@
-import { Bell, ClipboardList, DatabaseBackup, FileSearch, FileSpreadsheet, Gauge, History, LogOut, Map, Settings, ShieldCheck, UploadCloud } from 'lucide-react';
+import { Bell, ClipboardList, DatabaseBackup, FileSearch, FileSpreadsheet, Gauge, History, LogOut, Map, ShieldCheck, UploadCloud, Users } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 
 const nav = [
-  { to: '/', label: 'Dashboard', icon: Gauge },
-  { to: '/import', label: 'Import', icon: UploadCloud },
-  { to: '/documents', label: 'Documents', icon: FileSearch },
-  { to: '/reports', label: 'Reports', icon: FileSpreadsheet },
-  { to: '/rules', label: 'Rules', icon: ShieldCheck, admin: true },
-  { to: '/unit-mappings', label: 'Unit Mapping', icon: Map, admin: true },
-  { to: '/imports', label: 'Import History', icon: History },
-  { to: '/snapshots', label: 'Snapshots', icon: ClipboardList },
-  { to: '/settings', label: 'Settings', icon: Settings }
+  { to: '/', label: 'Tổng quan', icon: Gauge },
+  { to: '/import', label: 'Nhập dữ liệu', icon: UploadCloud },
+  { to: '/documents', label: 'Văn bản', icon: FileSearch },
+  { to: '/reports', label: 'Thống kê', icon: FileSpreadsheet },
+  { to: '/rules', label: 'Quy tắc phân loại', icon: ShieldCheck, admin: true },
+  { to: '/unit-mappings', label: 'Chuẩn hóa đơn vị', icon: Map, admin: true },
+  { to: '/users', label: 'Người dùng & quyền', icon: Users, admin: true },
+  { to: '/imports', label: 'Lịch sử nhập', icon: History },
+  { to: '/snapshots', label: 'Kết quả đã lưu', icon: ClipboardList }
 ];
 
 const titles: Record<string, string> = {
-  '/': 'Dashboard',
-  '/import': 'Import Excel',
-  '/documents': 'Documents',
-  '/reports': 'Reports',
-  '/rules': 'Classification Rules',
-  '/unit-mappings': 'Unit Mapping',
-  '/imports': 'Import History',
-  '/snapshots': 'Snapshots',
-  '/settings': 'Settings'
+  '/': 'Tổng quan',
+  '/import': 'Nhập file Excel',
+  '/documents': 'Danh sách văn bản',
+  '/reports': 'Thống kê',
+  '/rules': 'Quy tắc phân loại',
+  '/unit-mappings': 'Chuẩn hóa đơn vị',
+  '/users': 'Người dùng & phân quyền',
+  '/imports': 'Lịch sử nhập',
+  '/snapshots': 'Kết quả đã lưu'
 };
 
 export function AppLayout() {
@@ -43,7 +43,7 @@ export function AppLayout() {
     <div className="workspace">
       <header className="header">
         <div><p>Rà soát văn bản đi</p><h1>{titles[location.pathname] || 'iOffice'}</h1></div>
-        <div className="header-actions"><button aria-label="Notifications"><Bell size={18} /></button><span>{user?.displayName}</span><button onClick={logout} aria-label="Logout"><LogOut size={18} /></button></div>
+        <div className="header-actions"><button aria-label="Thông báo"><Bell size={18} /></button><span>{user?.displayName}</span><button onClick={logout} aria-label="Đăng xuất"><LogOut size={18} /></button></div>
       </header>
       <main><Outlet /></main>
     </div>

@@ -6,7 +6,6 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  useLocalMode: () => void;
   logout: () => void;
 };
 
@@ -17,11 +16,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (localStorage.getItem('ioffice.localMode')) {
-      setUser({ id: 'local', username: 'local', displayName: 'Local Mode', role: 'ADMIN' });
-      setLoading(false);
-      return;
-    }
     if (!localStorage.getItem('ioffice.token')) {
       setLoading(false);
       return;
@@ -40,14 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('ioffice.token', data.token);
       setUser(data.user);
     },
-    useLocalMode: () => {
-      localStorage.removeItem('ioffice.token');
-      localStorage.setItem('ioffice.localMode', '1');
-      setUser({ id: 'local', username: 'local', displayName: 'Local Mode', role: 'ADMIN' });
-    },
     logout: () => {
       localStorage.removeItem('ioffice.token');
-      localStorage.removeItem('ioffice.localMode');
       setUser(null);
     }
   }), [user, loading]);

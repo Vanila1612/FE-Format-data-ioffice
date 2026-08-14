@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSignedDocument, normalizeDocument, normalizeText, parseExcelDate } from '../src/services/normalizationService.js';
+import { documentDedupeKey, isSignedDocument, normalizeDocument, normalizeNhnoReferenceUnit, normalizeText, normalizeUnit, parseExcelDate } from '../src/services/normalizationService.js';
 
 describe('normalizationService', () => {
   it('trims spaces and normalizes empty values', () => {
@@ -25,5 +25,32 @@ describe('normalizationService', () => {
   it('detects signed documents', () => {
     expect(isSignedDocument('Đã ký số')).toBe(true);
     expect(isSignedDocument('')).toBe(false);
+  });
+
+  it('groups known unit-name variants into the requested canonical units', () => {
+    const emptyMappings: never[] = [];
+    expect(normalizeUnit('BAN KIỂM SOÁT', emptyMappings)).toBe('Ban Kiểm soát');
+    expect(normalizeUnit('Đảng Ủy Agribank', emptyMappings)).toBe('Đảng ủy Agribank');
+    expect(normalizeUnit('Trụ sở chính Agribank', emptyMappings)).toBe('Trụ sở chính');
+    expect(normalizeUnit('Văn phòng Trụ sở chính', emptyMappings)).toBe('Trụ sở chính');
+    expect(normalizeUnit('Công đoàn cơ sở Trung tâm Thẻ', emptyMappings)).toBe('Trung tâm Thẻ');
+    expect(normalizeUnit('Chi bộ Trung tâm PCRT', emptyMappings)).toBe('Trung tâm Phòng, chống rửa tiền');
+    expect(normalizeUnit('TTKH', emptyMappings)).toBe('Trung tâm Dịch vụ thanh toán và kiều hối');
+    expect(normalizeUnit('phòng Tổng hợp', emptyMappings)).toBe('Trụ sở chính');
+    expect(normalizeUnit('KIỂM TOÁN NỘI BỘ - BAN KIỂM SOÁT', emptyMappings)).toBe('Ban Kiểm soát');
+    expect(normalizeUnit('TTT.12', emptyMappings)).toBe('Trung tâm Thẻ');
+  });
+
+  it('uses reference number, issue date, and issuing unit as the duplicate identity', () => {
+    const date = new Date('2026-08-13T00:00:00.000Z');
+    expect(documentDedupeKey('01/CV-ABC', date, 'Ban Kiểm soát')).toBe(documentDedupeKey('01/CV-ABC', date, 'BAN KIỂM SOÁT'));
+    expect(documentDedupeKey('01/CV-ABC', date, 'Ban Kiểm soát')).not.toBe(documentDedupeKey('02/CV-ABC', date, 'Ban Kiểm soát'));
+  });
+
+  it('maps approved NHNo reference suffixes and excludes unknown suffixes', () => {
+    const emptyMappings: never[] = [];
+    expect(normalizeNhnoReferenceUnit('12969/NHNo-ALCO', emptyMappings)).toBe('TRUNG TÂM QUẢN LÝ NỢ CVĐ');
+    expect(normalizeNhnoReferenceUnit('1/NHNo-TTT.12', emptyMappings)).toBe('Trung tâm Thẻ');
+    expect(normalizeNhnoReferenceUnit('1073', emptyMappings)).toBeNull();
   });
 });

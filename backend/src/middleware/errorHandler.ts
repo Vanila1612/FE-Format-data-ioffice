@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import type { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { isProduction } from '../config/env.js';
@@ -15,11 +14,7 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
       : 'Unable to process request';
   const details = error instanceof AppError
     ? error.details
-    : error instanceof ZodError
-      ? error.issues
-      : error instanceof Prisma.PrismaClientKnownRequestError
-        ? { prismaCode: error.code }
-        : undefined;
+    : error instanceof ZodError ? error.issues : undefined;
 
   console.error(JSON.stringify({
     timestamp: new Date().toISOString(),

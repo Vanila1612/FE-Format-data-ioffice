@@ -2,9 +2,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { exportDocuments } from '../services/exportService.js';
-import { createImport, previewImport } from '../services/importService.js';
+import { createImport, deleteImport, previewImport, reprocessImport } from '../services/importService.js';
 import { listDocuments } from '../services/reportService.js';
 import { ok } from '../utils/apiResponse.js';
 import { AppError } from '../utils/appError.js';
@@ -37,6 +37,16 @@ importRoutes.get('/', asyncHandler(async (_req, res) => {
     include: { uploadedBy: { select: { id: true, username: true, displayName: true } }, _count: { select: { documents: true, snapshots: true } } }
   });
   return ok(res, imports);
+}));
+
+// Rebuilds documents from the original uploaded file. This fixes imports made
+// before duplicate rows were preserved, without asking the user to upload again.
+importRoutes.post('/:id/reprocess', requireAdmin, asyncHandler(async (req, res) => {
+  return ok(res, await reprocessImport(param(req, 'id')));
+}));
+
+importRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
+  return ok(res, await deleteImport(param(req, 'id')));
 }));
 
 importRoutes.get('/:id', asyncHandler(async (req, res) => {

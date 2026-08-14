@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { DocumentGroup } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
@@ -7,15 +6,14 @@ import { ok } from '../utils/apiResponse.js';
 import { AppError } from '../utils/appError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { param } from '../utils/request.js';
+import { DocumentGroup } from '../services/documentGroups.js';
 
 export const ruleRoutes = Router();
 
 const ruleSchema = z.object({
-  name: z.string().min(1),
-  keyword: z.string().min(1),
-  documentGroup: z.nativeEnum(DocumentGroup),
-  priority: z.coerce.number().int().min(0),
-  enabled: z.boolean().default(true)
+  keyword: z.string().trim().min(1),
+  documentGroup: z.enum([DocumentGroup.REPORT_PROPOSAL, DocumentGroup.LETTER_AUTHORIZATION, DocumentGroup.WORK_LETTER]),
+  priority: z.coerce.number().int().min(0).optional()
 });
 
 ruleRoutes.use(requireAuth);
@@ -27,12 +25,12 @@ ruleRoutes.get('/', asyncHandler(async (_req, res) => {
 
 ruleRoutes.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const body = ruleSchema.parse(req.body);
-  return ok(res, await prisma.classificationRule.create({ data: body }), 201);
+  return ok(res, await prisma.classificationRule.create({ data: { ...body, priority: body.priority ?? 50, name: body.keyword, enabled: true } }), 201);
 }));
 
 ruleRoutes.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const body = ruleSchema.partial().parse(req.body);
-  return ok(res, await prisma.classificationRule.update({ where: { id: param(req, 'id') }, data: body }));
+  return ok(res, await prisma.classificationRule.update({ where: { id: param(req, 'id') }, data: { ...body, enabled: true } }));
 }));
 
 ruleRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {

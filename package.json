@@ -14,7 +14,7 @@
     "test": "pnpm --filter @ioffice/backend test && pnpm --filter @ioffice/frontend test",
     "lint": "pnpm --filter @ioffice/backend typecheck && pnpm --filter @ioffice/frontend typecheck",
     "prisma:generate": "pnpm --filter @ioffice/backend prisma:generate",
-    "prisma:migrate": "pnpm --filter @ioffice/backend prisma:migrate",
+    "prisma:push": "pnpm --filter @ioffice/backend prisma:push",
     "seed": "pnpm --filter @ioffice/backend seed"
   },
   "devDependencies": {

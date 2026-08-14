@@ -3,12 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { exportSnapshot } from '../services/exportService.js';
-import { compareSnapshots, createSnapshot } from '../services/snapshotService.js';
+import { compareSnapshots, createSnapshot, snapshotReport } from '../services/snapshotService.js';
 import { ok } from '../utils/apiResponse.js';
 import { AppError } from '../utils/appError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { param } from '../utils/request.js';
-import { paginationSchema } from '../validators/common.js';
+import { documentFiltersSchema, paginationSchema } from '../validators/common.js';
 
 export const snapshotRoutes = Router();
 
@@ -31,9 +31,14 @@ snapshotRoutes.post('/', asyncHandler(async (req, res) => {
   const body = z.object({
     name: z.string().min(1),
     description: z.string().optional(),
-    importId: z.string().min(1)
+    importId: z.string().min(1).optional(),
+    filters: documentFiltersSchema.optional()
   }).parse(req.body);
   return ok(res, await createSnapshot({ ...body, createdById: req.user!.id }), 201);
+}));
+
+snapshotRoutes.get('/:id/report', asyncHandler(async (req, res) => {
+  return ok(res, await snapshotReport(param(req, 'id')));
 }));
 
 snapshotRoutes.get('/compare', asyncHandler(async (req, res) => {
@@ -57,7 +62,7 @@ snapshotRoutes.get('/:id', asyncHandler(async (req, res) => {
 
 snapshotRoutes.get('/:id/documents', asyncHandler(async (req, res) => {
   const query = paginationSchema.parse(req.query);
-  const [total, items] = await prisma.$transaction([
+  const [total, items] = await Promise.all([
     prisma.snapshotDocument.count({ where: { snapshotId: param(req, 'id') } }),
     prisma.snapshotDocument.findMany({
       where: { snapshotId: param(req, 'id') },
@@ -74,4 +79,13 @@ snapshotRoutes.get('/:id/export', asyncHandler(async (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="ioffice-snapshot-${new Date().toISOString().slice(0, 10)}.xlsx"`);
   return res.send(buffer);
+}));
+
+snapshotRoutes.delete('/:id', asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const snapshot = await prisma.snapshot.findUnique({ where: { id }, select: { id: true, createdById: true } });
+  if (!snapshot) throw new AppError(404, 'SNAPSHOT_NOT_FOUND', 'Không tìm thấy kết quả đã lưu');
+  if (req.user!.role !== 'ADMIN' && snapshot.createdById !== req.user!.id) throw new AppError(403, 'FORBIDDEN', 'Bạn không có quyền xóa kết quả này');
+  await prisma.$transaction(async (tx) => { await tx.snapshotDocument.deleteMany({ where: { snapshotId: id } }); await tx.snapshot.delete({ where: { id } }); });
+  return ok(res, { deleted: true });
 }));

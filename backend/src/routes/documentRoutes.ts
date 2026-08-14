@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { listDocuments } from '../services/reportService.js';
 import { ok } from '../utils/apiResponse.js';
 import { AppError } from '../utils/appError.js';
@@ -21,4 +21,12 @@ documentRoutes.get('/:id', asyncHandler(async (req, res) => {
   const document = await prisma.document.findUnique({ where: { id: param(req, 'id') }, include: { import: true } });
   if (!document) throw new AppError(404, 'DOCUMENT_NOT_FOUND', 'Document not found');
   return ok(res, document);
+}));
+
+documentRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const document = await prisma.document.findUnique({ where: { id } });
+  if (!document) throw new AppError(404, 'DOCUMENT_NOT_FOUND', 'Không tìm thấy văn bản');
+  await prisma.document.delete({ where: { id } });
+  return ok(res, { deleted: true });
 }));

@@ -10,9 +10,8 @@ import { param } from '../utils/request.js';
 export const unitMappingRoutes = Router();
 
 const mappingSchema = z.object({
-  sourceName: z.string().min(1),
-  normalizedName: z.string().min(1),
-  enabled: z.boolean().default(true)
+  sourceName: z.string().trim().min(1),
+  normalizedName: z.string().trim().min(1)
 });
 
 unitMappingRoutes.use(requireAuth);
@@ -31,12 +30,12 @@ unitMappingRoutes.get('/', asyncHandler(async (req, res) => {
 
 unitMappingRoutes.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const body = mappingSchema.parse(req.body);
-  return ok(res, await prisma.unitMapping.create({ data: body }), 201);
+  return ok(res, await prisma.unitMapping.create({ data: { ...body, enabled: true } }), 201);
 }));
 
 unitMappingRoutes.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const body = mappingSchema.partial().parse(req.body);
-  return ok(res, await prisma.unitMapping.update({ where: { id: param(req, 'id') }, data: body }));
+  return ok(res, await prisma.unitMapping.update({ where: { id: param(req, 'id') }, data: { ...body, enabled: true } }));
 }));
 
 unitMappingRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {

@@ -36,6 +36,14 @@ async function main() {
   const mappings = [
     { sourceName: 'ALCO', normalizedName: 'ALCO' },
     { sourceName: 'Văn phòng Trụ sở chính', normalizedName: 'Trụ sở chính' },
+    { sourceName: 'Trụ sở chính Agribank', normalizedName: 'Trụ sở chính' },
+    { sourceName: 'Phòng Tổng hợp', normalizedName: 'Trụ sở chính' },
+    { sourceName: 'Ban Kiểm soát', normalizedName: 'Ban Kiểm soát' },
+    { sourceName: 'KIỂM TOÁN NỘI BỘ - BAN KIỂM SOÁT', normalizedName: 'Ban Kiểm soát' },
+    { sourceName: 'Đảng Ủy Agribank', normalizedName: 'Đảng ủy Agribank' },
+    { sourceName: 'Công đoàn cơ sở Trung tâm Thẻ', normalizedName: 'Trung tâm Thẻ' },
+    { sourceName: 'Chi bộ Trung tâm PCRT', normalizedName: 'Trung tâm Phòng, chống rửa tiền' },
+    { sourceName: 'TTKH', normalizedName: 'Trung tâm Dịch vụ thanh toán và kiều hối' },
     { sourceName: 'Ban Khách hàng doanh nghiệp', normalizedName: 'Ban Khách hàng Doanh nghiệp' }
   ];
 

@@ -12,6 +12,7 @@ import { reportRoutes } from './routes/reportRoutes.js';
 import { ruleRoutes } from './routes/ruleRoutes.js';
 import { snapshotRoutes } from './routes/snapshotRoutes.js';
 import { unitMappingRoutes } from './routes/unitMappingRoutes.js';
+import { userRoutes } from './routes/userRoutes.js';
 import { fail } from './utils/apiResponse.js';
 
 export function createApp() {
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api/documents', documentRoutes);
   app.use('/api/rules', ruleRoutes);
   app.use('/api/unit-mappings', unitMappingRoutes);
+  app.use('/api/users', userRoutes);
   app.use('/api/snapshots', snapshotRoutes);
   app.use('/api/reports', reportRoutes);
   app.use((_req, res) => fail(res, 404, 'NOT_FOUND', 'Route not found'));

@@ -1,6 +1,6 @@
 import { DocumentGroup } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { classifyDocument, unitFromReference } from '../src/services/classificationService.js';
+import { classifyDocument } from '../src/services/classificationService.js';
 
 const rules = [
   { id: 'bc', name: 'BC', keyword: 'BC', documentGroup: DocumentGroup.REPORT_PROPOSAL, priority: 20, enabled: true },
@@ -24,15 +24,23 @@ describe('classificationService', () => {
     expect(classifyDocument({ referenceNumber: '12/TB-ABC', issuingUnit: 'ABC', normalizedUnit: 'ABC' }, rules).documentGroup).toBe(DocumentGroup.WORK_LETTER);
   });
 
-  it('handles NHNo and Agribank before normal rules', () => {
-    const nhno = classifyDocument({ referenceNumber: '12969/NHNo-ALCO', issuingUnit: 'NHNo', normalizedUnit: 'NHNo' }, rules);
-    expect(nhno.documentGroup).toBe(DocumentGroup.LETTER_AUTHORIZATION);
-    expect(nhno.normalizedUnit).toBe('ALCO');
-    const agribank = classifyDocument({ referenceNumber: '1/BC-TSC', issuingUnit: 'Agribank', normalizedUnit: 'Agribank' }, rules);
-    expect(agribank.documentGroup).toBe(DocumentGroup.LETTER_AUTHORIZATION);
+  it('uses the smallest priority when more than one rule matches', () => {
+    const overlappingRules = [
+      { id: 'first', name: 'First', keyword: 'BC', documentGroup: DocumentGroup.REPORT_PROPOSAL, priority: 10, enabled: false },
+      { id: 'second', name: 'Second', keyword: 'BC', documentGroup: DocumentGroup.LETTER_AUTHORIZATION, priority: 20, enabled: true }
+    ];
+    const result = classifyDocument({ referenceNumber: '12/BC-ABC', issuingUnit: 'ABC', normalizedUnit: 'ABC' }, overlappingRules);
+    expect(result.documentGroup).toBe(DocumentGroup.REPORT_PROPOSAL);
+    expect(result.matchedRuleId).toBe('first');
   });
 
-  it('extracts unit after dash in reference number', () => {
-    expect(unitFromReference('12969/NHNo-ALCO')).toBe('ALCO');
+  it('handles only exact NHNo issuing units before normal rules', () => {
+    const nhno = classifyDocument({ referenceNumber: '12969/NHNo-ALCO', issuingUnit: 'NHNo', normalizedUnit: 'NHNo' }, rules);
+    expect(nhno.documentGroup).toBe(DocumentGroup.LETTER_AUTHORIZATION);
+    expect(nhno.normalizedUnit).toBe('NHNo');
+    expect(nhno.useReferenceSuffix).toBe(true);
+    const partyOffice = classifyDocument({ referenceNumber: '1/BC-TSC', issuingUnit: 'Đảng ủy Agribank', normalizedUnit: 'Đảng ủy Agribank' }, rules);
+    expect(partyOffice.documentGroup).toBe(DocumentGroup.REPORT_PROPOSAL);
+    expect(partyOffice.useReferenceSuffix).toBe(false);
   });
 });

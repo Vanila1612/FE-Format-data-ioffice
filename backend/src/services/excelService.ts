@@ -24,9 +24,13 @@ export function parseWorkbook(buffer: Buffer): ParsedWorkbook {
 
   const headers = matrix[headerIndex].map(normalizeText);
   const normalizedHeaders = headers.map(normalizeHeader);
+  const sttIndex = normalizedHeaders.indexOf('stt');
   const rows = matrix
     .slice(headerIndex + 1)
     .filter((row) => row.some((cell) => normalizeText(cell)))
+    // The iOffice export contains a second row such as “(1), (2), …”.
+    // It describes the columns; it is not a document and must not be imported.
+    .filter((row) => sttIndex < 0 || Number.isFinite(Number(row[sttIndex])))
     .map((row) => Object.fromEntries(row.map((cell, index) => [headers[index] || `Column ${index + 1}`, cell])))
     .filter((row) => normalizedHeaders.some((_, index) => normalizeText(Object.values(row)[index])));
 

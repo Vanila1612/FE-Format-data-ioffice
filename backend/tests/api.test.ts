@@ -1,14 +1,14 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const queryRaw = vi.fn();
+const runCommandRaw = vi.fn();
 
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://ioffice:ioffice@localhost:5432/ioffice_test';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'mongodb://localhost:27017/ioffice_test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-change-me';
 
 vi.mock('../src/config/prisma.js', () => ({
   prisma: {
-    $queryRaw: queryRaw
+    $runCommandRaw: runCommandRaw
   }
 }));
 
@@ -16,8 +16,8 @@ const { createApp } = await import('../src/app.js');
 
 describe('api envelope', () => {
   beforeEach(() => {
-    queryRaw.mockReset();
-    queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    runCommandRaw.mockReset();
+    runCommandRaw.mockResolvedValue({ ok: 1 });
   });
 
   it('returns standard health response', async () => {

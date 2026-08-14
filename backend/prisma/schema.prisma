@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -26,7 +26,7 @@ enum DocumentGroup {
 }
 
 model User {
-  id           String     @id @default(cuid())
+  id           String     @id @default(cuid()) @map("_id")
   username     String     @unique
   passwordHash String
   displayName  String
@@ -38,7 +38,7 @@ model User {
 }
 
 model Import {
-  id               String       @id @default(cuid())
+  id               String       @id @default(cuid()) @map("_id")
   originalFileName String
   storedFileName   String
   filePath         String
@@ -61,7 +61,7 @@ model Import {
 }
 
 model Document {
-  id              String        @id @default(cuid())
+  id              String        @id @default(cuid()) @map("_id")
   importId        String
   import          Import        @relation(fields: [importId], references: [id], onDelete: Cascade)
   summary         String
@@ -71,6 +71,7 @@ model Document {
   issuingUnit     String
   normalizedUnit  String
   documentGroup   DocumentGroup
+  dedupeKey       String
   rawData         Json
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -81,11 +82,13 @@ model Document {
   @@index([normalizedUnit])
   @@index([documentGroup])
   @@index([issueDate])
+  @@index([importId, issueDate])
+  @@index([dedupeKey])
   @@map("documents")
 }
 
 model ClassificationRule {
-  id            String        @id @default(cuid())
+  id            String        @id @default(cuid()) @map("_id")
   name          String
   keyword       String
   documentGroup DocumentGroup
@@ -99,7 +102,7 @@ model ClassificationRule {
 }
 
 model UnitMapping {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid()) @map("_id")
   sourceName     String   @unique
   normalizedName String
   enabled        Boolean  @default(true)
@@ -111,7 +114,7 @@ model UnitMapping {
 }
 
 model RuleVersion {
-  id        String     @id @default(cuid())
+  id        String     @id @default(cuid()) @map("_id")
   version   Int        @unique
   rulesJson Json
   createdBy String?
@@ -122,10 +125,10 @@ model RuleVersion {
 }
 
 model Snapshot {
-  id             String             @id @default(cuid())
+  id             String             @id @default(cuid()) @map("_id")
   name           String
-  importId       String
-  import         Import             @relation(fields: [importId], references: [id])
+  importId       String?
+  import         Import?            @relation(fields: [importId], references: [id])
   ruleVersionId  String
   ruleVersion    RuleVersion        @relation(fields: [ruleVersionId], references: [id])
   mappingVersion Int
@@ -133,6 +136,8 @@ model Snapshot {
   createdBy      User               @relation("SnapshotCreator", fields: [createdById], references: [id])
   createdAt      DateTime           @default(now())
   description    String?
+  filtersJson    Json?
+  reportJson     Json?
   documents      SnapshotDocument[]
 
   @@index([importId])
@@ -141,7 +146,7 @@ model Snapshot {
 }
 
 model SnapshotDocument {
-  id                 String        @id @default(cuid())
+  id                 String        @id @default(cuid()) @map("_id")
   snapshotId         String
   snapshot           Snapshot      @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   originalDocumentId String

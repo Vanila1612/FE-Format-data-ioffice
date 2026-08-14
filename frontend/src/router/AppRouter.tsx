@@ -8,7 +8,7 @@ import { ImportsPage } from '../pages/ImportsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { RulesPage } from '../pages/RulesPage';
-import { SettingsPage } from '../pages/SettingsPage';
+import { UsersPage } from '../pages/UsersPage';
 import { SnapshotsPage } from '../pages/SnapshotsPage';
 import { UnitMappingsPage } from '../pages/UnitMappingsPage';
 import { LoadingState } from '../components/State';
@@ -32,7 +32,7 @@ export function AppRouter() {
       <Route path="/unit-mappings" element={<UnitMappingsPage />} />
       <Route path="/imports" element={<ImportsPage />} />
       <Route path="/snapshots" element={<SnapshotsPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/users" element={<UsersPage />} />
     </Route>
   </Routes>;
 }

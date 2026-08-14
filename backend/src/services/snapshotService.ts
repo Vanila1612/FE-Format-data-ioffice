@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma.js';
 import { Prisma } from '@prisma/client';
 import { AppError } from '../utils/appError.js';
+import { buildDocumentWhere, isReportableDocument, summaryFromDocuments, type DocumentFilters } from './reportService.js';
 
 type SnapshotSourceDocument = {
   id: string;
@@ -43,33 +44,41 @@ export async function createRuleVersion(createdBy: string) {
   });
 }
 
-export async function createSnapshot(input: { name: string; description?: string; importId: string; createdById: string }) {
-  const documents = await prisma.document.findMany({ where: { importId: input.importId }, orderBy: { createdAt: 'asc' } });
-  if (documents.length === 0) throw new AppError(400, 'EMPTY_IMPORT', 'Cannot create snapshot for an import without documents');
+export async function createSnapshot(input: { name: string; description?: string; importId?: string; filters?: DocumentFilters; createdById: string }) {
+  const filters = { ...(input.filters || {}), ...(input.importId ? { importId: input.importId } : {}) };
+  const documents = (await prisma.document.findMany({ where: buildDocumentWhere(filters), orderBy: { createdAt: 'asc' } })).filter(isReportableDocument);
+  if (documents.length === 0) throw new AppError(400, 'EMPTY_REPORT', 'Cannot create a snapshot from an empty report');
   const ruleVersion = await createRuleVersion(input.createdById);
   const mappingVersion = await prisma.unitMapping.count();
-
-  return prisma.$transaction(async (tx) => {
-    const snapshot = await tx.snapshot.create({
-      data: {
-        name: input.name,
-        description: input.description,
-        importId: input.importId,
-        ruleVersionId: ruleVersion.id,
-        mappingVersion,
-        createdById: input.createdById
-      }
-    });
-
-    await tx.snapshotDocument.createMany({
-      data: documents.map((document) => snapshotDocumentInput(snapshot.id, document))
-    });
-
-    return tx.snapshot.findUniqueOrThrow({
-      where: { id: snapshot.id },
-      include: { import: true, ruleVersion: true, _count: { select: { documents: true } } }
-    });
+  const snapshot = await prisma.snapshot.create({
+    data: {
+      name: input.name,
+      description: input.description,
+      importId: input.importId || filters.importId,
+      ruleVersionId: ruleVersion.id,
+      mappingVersion,
+      createdById: input.createdById,
+      filtersJson: filters as Prisma.InputJsonValue,
+      reportJson: summaryFromDocuments(documents) as Prisma.InputJsonValue
+    }
   });
+
+  await prisma.snapshotDocument.createMany({
+    data: documents.map((document) => snapshotDocumentInput(snapshot.id, document))
+  });
+
+  return prisma.snapshot.findUniqueOrThrow({
+    where: { id: snapshot.id },
+    include: { import: true, ruleVersion: true, _count: { select: { documents: true } } }
+  });
+}
+
+export async function snapshotReport(snapshotId: string) {
+  const snapshot = await prisma.snapshot.findUnique({ where: { id: snapshotId } });
+  if (!snapshot) throw new AppError(404, 'SNAPSHOT_NOT_FOUND', 'Snapshot not found');
+  if (snapshot.reportJson) return snapshot.reportJson;
+  const documents = await prisma.snapshotDocument.findMany({ where: { snapshotId } });
+  return summaryFromDocuments(documents);
 }
 
 export async function compareSnapshots(leftId: string, rightId: string) {
@@ -81,20 +90,20 @@ export async function compareSnapshots(leftId: string, rightId: string) {
 
   const identity = (document: { referenceNumber: string; issueDate: Date | null; summary: string }) =>
     `${document.referenceNumber}|${document.issueDate?.toISOString() || ''}|${document.summary}`;
-  const leftMap = new Map(left.documents.map((document) => [identity(document), document]));
-  const rightMap = new Map(right.documents.map((document) => [identity(document), document]));
-  const added = [...rightMap.keys()].filter((key) => !leftMap.has(key));
-  const removed = [...leftMap.keys()].filter((key) => !rightMap.has(key));
-  const changed = [...rightMap.keys()].filter((key) => {
-    const before = leftMap.get(key);
-    const after = rightMap.get(key);
-    return before && after && (
-      before.documentGroup !== after.documentGroup ||
-      before.normalizedUnit !== after.normalizedUnit ||
-      before.signedDocument !== after.signedDocument
-    );
-  });
-  const unchanged = [...rightMap.keys()].filter((key) => leftMap.has(key) && !changed.includes(key));
-
-  return { added: added.length, removed: removed.length, changed: changed.length, unchanged: unchanged.length };
+  const bucket = <T extends { referenceNumber: string; issueDate: Date | null; summary: string }>(documents: T[]) => documents.reduce((map, document) => {
+    const key = identity(document); const values = map.get(key) || []; values.push(document); map.set(key, values); return map;
+  }, new Map<string, T[]>());
+  const leftBuckets = bucket(left.documents); const rightBuckets = bucket(right.documents);
+  let added = 0; let removed = 0; let changed = 0; let unchanged = 0;
+  for (const key of new Set([...leftBuckets.keys(), ...rightBuckets.keys()])) {
+    const before = leftBuckets.get(key) || []; const after = rightBuckets.get(key) || [];
+    const matched = Math.min(before.length, after.length);
+    removed += before.length - matched; added += after.length - matched;
+    for (let index = 0; index < matched; index += 1) {
+      const leftDocument = before[index]; const rightDocument = after[index];
+      if (leftDocument.documentGroup !== rightDocument.documentGroup || leftDocument.normalizedUnit !== rightDocument.normalizedUnit || leftDocument.signedDocument !== rightDocument.signedDocument) changed += 1;
+      else unchanged += 1;
+    }
+  }
+  return { added, removed, changed, unchanged };
 }

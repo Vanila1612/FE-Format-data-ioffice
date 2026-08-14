@@ -7,6 +7,8 @@ export type User = {
   username: string;
   displayName: string;
   role: 'ADMIN' | 'USER';
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ImportRecord = {
@@ -48,6 +50,16 @@ export type Summary = {
   totals: { total: number; signed: number; unsigned: number; signRate: number };
   byGroup: { key: DocumentGroup; label: string; total: number }[];
   byUnit: { unit: string; total: number; signed: number; unsigned: number; signRate: number }[];
+  boardRows: ResultBoardRow[];
+};
+
+export type ResultBoardRow = {
+  stt: number;
+  unit: string;
+  reportSigned: number; reportTotal: number; reportRate: number;
+  letterSigned: number; letterTotal: number; letterRate: number;
+  workSigned: number; workTotal: number; workRate: number;
+  totalSigned: number; totalDocuments: number; totalRate: number;
 };
 
 export type ClassificationRule = {
@@ -71,9 +83,10 @@ export type Snapshot = {
   name: string;
   description?: string;
   createdAt: string;
-  import: ImportRecord;
+  import?: ImportRecord;
   ruleVersion: { version: number };
   mappingVersion: number;
+  filtersJson?: { from?: string; to?: string; importId?: string; search?: string; unit?: string; group?: DocumentGroup };
   createdBy: User;
   _count?: { documents: number };
 };

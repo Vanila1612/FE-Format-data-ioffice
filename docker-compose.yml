@@ -1,19 +1,42 @@
 services:
-  postgres:
-    image: postgres:16-alpine
+  mongo:
+    image: mongo:8.0.20
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - >-
+        if [ ! -f /data/db/keyfile ]; then openssl rand -base64 756 > /data/db/keyfile;
+        chmod 400 /data/db/keyfile; chown mongodb:mongodb /data/db/keyfile; fi;
+        exec /usr/local/bin/docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all --keyFile /data/db/keyfile
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-ioffice}
-      POSTGRES_USER: ${POSTGRES_USER:-ioffice}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ioffice}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-ioffice}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-ioffice}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-ioffice}
     ports:
-      - "5432:5432"
+      - "27018:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ioffice} -d ${POSTGRES_DB:-ioffice}"]
+      test: ["CMD-SHELL", "mongosh --quiet --username ${MONGO_INITDB_ROOT_USERNAME:-ioffice} --password ${MONGO_INITDB_ROOT_PASSWORD:-ioffice} --authenticationDatabase admin --eval 'db.adminCommand(\"ping\").ok' localhost:27017/admin | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  mongo-init:
+    image: mongo:8.0.20
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-ioffice}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-ioffice}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >-
+        mongosh --host mongo:27017 --username "$$MONGO_INITDB_ROOT_USERNAME"
+        --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet
+        --eval 'try { rs.status().ok } catch (error) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}); }'
 
   backend:
     build:
@@ -27,7 +50,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123456}
       ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-System Admin}
       MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-50}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ioffice}:${POSTGRES_PASSWORD:-ioffice}@postgres:5432/${POSTGRES_DB:-ioffice}
+      DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-ioffice}:${MONGO_INITDB_ROOT_PASSWORD:-ioffice}@mongo:27017/${MONGO_INITDB_DATABASE:-ioffice}?authSource=admin&replicaSet=rs0
       UPLOAD_DIR: /app/storage/uploads
       EXPORT_DIR: /app/storage/exports
       SNAPSHOT_DIR: /app/storage/snapshots
@@ -37,8 +60,8 @@ services:
     volumes:
       - app_storage:/app/storage
     depends_on:
-      postgres:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
       interval: 15s
@@ -55,5 +78,5 @@ services:
       - backend
 
 volumes:
-  postgres_data:
+  mongo_data:
   app_storage:
