@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { env } from './config/env.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { aiRoutes } from './routes/aiRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { documentRoutes } from './routes/documentRoutes.js';
 import { healthRoutes } from './routes/healthRoutes.js';
@@ -29,6 +30,7 @@ export function createApp() {
   app.use('/api/users', userRoutes);
   app.use('/api/snapshots', snapshotRoutes);
   app.use('/api/reports', reportRoutes);
+  app.use('/api/ai', rateLimit({ windowMs: 60_000, limit: 30 }), aiRoutes);
   app.use((_req, res) => fail(res, 404, 'NOT_FOUND', 'Route not found'));
   app.use(errorHandler);
   return app;

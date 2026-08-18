@@ -13,8 +13,15 @@ const envSchema = z.object({
   MAX_UPLOAD_SIZE_MB: z.coerce.number().default(50),
   ADMIN_USERNAME: z.string().default('admin'),
   ADMIN_PASSWORD: z.string().default('admin123456'),
-  ADMIN_DISPLAY_NAME: z.string().default('System Admin')
+  ADMIN_DISPLAY_NAME: z.string().default('System Admin'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  AI_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(6)
 });
 
 export const env = envSchema.parse(process.env);
 export const isProduction = env.NODE_ENV === 'production';
+
+export function isAiEnabled(): boolean {
+  return Boolean(env.OPENAI_API_KEY && env.OPENAI_API_KEY.trim().length > 0);
+}

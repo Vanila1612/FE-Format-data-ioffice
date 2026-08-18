@@ -138,3 +138,89 @@ td:nth-child(2) { white-space: normal; min-width: 220px; }
   .toolbar { flex-wrap: wrap; }
   .toolbar input { width: 100%; }
 }
+
+.assistant-page { max-width: 920px; margin: 0 auto; }
+.assistant-title { display: flex; gap: 12px; align-items: flex-start; color: var(--primary-strong); }
+.assistant-title h2 { margin: 0; font-size: 18px; }
+.assistant-title p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.assistant-actions { display: flex; gap: 8px; }
+
+.chat-window {
+  min-height: 420px;
+  max-height: 62vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf9;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chat-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--muted);
+  padding: 28px 12px;
+}
+.chat-empty strong { color: #17201c; font-size: 16px; }
+.chat-empty p { margin: 0; max-width: 460px; line-height: 1.55; }
+.suggestion-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.suggestion-row button { white-space: normal; text-align: left; line-height: 1.35; }
+
+.chat-bubble {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+  max-width: 92%;
+}
+.chat-bubble.user { background: #eef6f4; border-color: #cbe1dc; align-self: flex-end; }
+.chat-bubble header { font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+.chat-bubble.user header { color: var(--primary-strong); }
+.chat-content { white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
+.typing { color: var(--muted); font-style: italic; }
+.typing::after {
+  content: '▌';
+  margin-left: 2px;
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink { to { visibility: hidden; } }
+
+.tool-trace {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tool-trace li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--primary-strong);
+  background: #e1efeb;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.chat-input {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+.chat-input textarea {
+  resize: vertical;
+  min-height: 64px;
+  font-family: inherit;
+  font-size: 14px;
+}
+.chat-input button { min-height: 42px; }

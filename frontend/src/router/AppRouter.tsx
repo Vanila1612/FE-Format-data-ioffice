@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '../layouts/AppLayout';
 import { useAuth } from '../services/auth';
+import { AssistantPage } from '../pages/AssistantPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { ImportPage } from '../pages/ImportPage';
@@ -28,6 +29,7 @@ export function AppRouter() {
       <Route path="/import" element={<ImportPage />} />
       <Route path="/documents" element={<DocumentsPage />} />
       <Route path="/reports" element={<ReportsPage />} />
+      <Route path="/assistant" element={<AssistantPage />} />
       <Route path="/rules" element={<RulesPage />} />
       <Route path="/unit-mappings" element={<UnitMappingsPage />} />
       <Route path="/imports" element={<ImportsPage />} />

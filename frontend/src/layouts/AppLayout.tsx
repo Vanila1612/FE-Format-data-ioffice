@@ -1,4 +1,4 @@
-import { Bell, ClipboardList, DatabaseBackup, FileSearch, FileSpreadsheet, Gauge, History, LogOut, Map, ShieldCheck, UploadCloud, Users } from 'lucide-react';
+import { Bell, ClipboardList, DatabaseBackup, FileSearch, FileSpreadsheet, Gauge, History, LogOut, Map, ShieldCheck, Sparkles, UploadCloud, Users } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 
@@ -7,6 +7,7 @@ const nav = [
   { to: '/import', label: 'Nhập dữ liệu', icon: UploadCloud },
   { to: '/documents', label: 'Văn bản', icon: FileSearch },
   { to: '/reports', label: 'Thống kê', icon: FileSpreadsheet },
+  { to: '/assistant', label: 'Trợ lý AI', icon: Sparkles },
   { to: '/rules', label: 'Quy tắc phân loại', icon: ShieldCheck, admin: true },
   { to: '/unit-mappings', label: 'Chuẩn hóa đơn vị', icon: Map, admin: true },
   { to: '/users', label: 'Người dùng & quyền', icon: Users, admin: true },
@@ -19,6 +20,7 @@ const titles: Record<string, string> = {
   '/import': 'Nhập file Excel',
   '/documents': 'Danh sách văn bản',
   '/reports': 'Thống kê',
+  '/assistant': 'Trợ lý AI',
   '/rules': 'Quy tắc phân loại',
   '/unit-mappings': 'Chuẩn hóa đơn vị',
   '/users': 'Người dùng & phân quyền',
