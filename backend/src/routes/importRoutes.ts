@@ -45,6 +45,27 @@ importRoutes.post('/:id/reprocess', requireAdmin, asyncHandler(async (req, res) 
   return ok(res, await reprocessImport(param(req, 'id')));
 }));
 
+// Re-runs classification for every completed import. Used after editing
+// classification rules so existing documents pick up the new grouping.
+importRoutes.post('/reprocess-all', requireAdmin, asyncHandler(async (req, res) => {
+  const imports = await prisma.import.findMany({ where: { status: 'COMPLETED' }, select: { id: true } });
+  const results: Array<{ id: string; status: 'ok' | 'error'; count: number; error?: string }> = [];
+  for (const entry of imports) {
+    try {
+      const updated = await reprocessImport(entry.id);
+      results.push({ id: entry.id, status: 'ok', count: updated._count.documents });
+    } catch (error) {
+      results.push({
+        id: entry.id,
+        status: 'error',
+        count: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+  return ok(res, { processed: imports.length, results });
+}));
+
 importRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   return ok(res, await deleteImport(param(req, 'id')));
 }));

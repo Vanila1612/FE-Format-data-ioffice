@@ -1,18 +1,32 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Bot, Send, Sparkles, StopCircle, Trash2, Wrench } from 'lucide-react';
+import { Bot, MessageSquarePlus, Pencil, Send, Sparkles, StopCircle, Trash2, Wrench, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  streamAssistantChat,
+  deleteAssistantSession,
+  getAssistantSession,
   getAssistantStatus,
+  listAssistantSessions,
+  renameAssistantSession,
+  streamAssistantChat,
   type AssistantMessage,
-  type AssistantToolEvent
+  type AssistantToolEvent,
+  type SavedSessionSummary,
+  type SavedTurn
 } from '../services/assistant';
 
 const suggestions = [
-  'Top 10 đơn vị xử lý xong văn bản nhiều nhất?',
-  'Tỷ lệ ký văn bản theo từng nhóm?',
+  'Top 10 đơn vị phát hành nhiều văn bản nhất (tính trên tổng số)?',
+  'Top 10 đơn vị có tỷ lệ ký văn bản cao nhất?',
+  'Tỷ lệ ký văn bản theo 3 nhóm (Báo cáo/Tờ trình, Công văn/Ủy quyền, Thư công tác)?',
+  'Tóm tắt tổng quan: tổng văn bản, đã ký, chưa ký, tỷ lệ ký?',
+  'Xu hướng ký văn bản theo tháng trong 6 tháng gần nhất?',
   'Đơn vị nào phát hành nhiều văn bản nhất trong tháng vừa rồi?',
-  'Liệt kê 5 văn bản mới nhất của đơn vị ALCO'
+  'Liệt kê 5 văn bản mới nhất của đơn vị ALCO',
+  'Tìm văn bản có trích yếu chứa "báo cáo kết quả" trong 30 ngày gần nhất',
+  'Liệt kê 10 văn bản gần đây nhất của đơn vị Hội sở',
+  'Top 10 đơn vị xử lý xong nhiều nhất trong quý này (tính theo tổng số)?',
+  'Tỷ lệ ký văn bản cao nhất tuần này của các đơn vị?',
+  'Văn bản nào của đơn vị Chi nhánh Cần Thơ phát hành trong tháng 8?'
 ];
 
 function newId() {
@@ -25,17 +39,66 @@ function formatToolSummary(event: AssistantToolEvent): string {
   return `Lỗi ${event.code}`;
 }
 
+function turnsToMessages(turns: SavedTurn[]): AssistantMessage[] {
+  const out: AssistantMessage[] = [];
+  for (const turn of turns) {
+    out.push({ id: `t_${turn.id}_u`, role: 'user', content: turn.prompt });
+    out.push({
+      id: `t_${turn.id}_a`,
+      role: 'assistant',
+      content: turn.response,
+      toolEvents: turn.toolEvents ?? []
+    });
+  }
+  return out;
+}
+
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  const diff = Date.now() - date.getTime();
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) return 'vừa xong';
+  if (diff < hour) return `${Math.floor(diff / minute)} phút trước`;
+  if (diff < day) return `${Math.floor(diff / hour)} giờ trước`;
+  if (diff < 7 * day) return `${Math.floor(diff / day)} ngày trước`;
+  return date.toLocaleDateString('vi-VN');
+}
+
 export function AssistantPage() {
   const [status, setStatus] = useState<{ available: boolean; enabled: boolean } | null>(null);
+  const [sessions, setSessions] = useState<SavedSessionSummary[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  async function refreshSessions() {
+    try {
+      const list = await listAssistantSessions();
+      setSessions(list);
+    } catch {
+      // ignore — sidebar just won't show sessions
+    }
+  }
+
   useEffect(() => {
-    getAssistantStatus().then(setStatus).catch(() => setStatus({ available: false, enabled: false }));
+    listAssistantSessions()
+      .then((list) => setSessions(list))
+      .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!status) {
+      getAssistantStatus().then(setStatus).catch(() => setStatus({ available: false, enabled: false }));
+    }
+  }, [status]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -49,6 +112,56 @@ export function AssistantPage() {
 
   function appendToolEvent(messageId: string, event: AssistantToolEvent) {
     setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, toolEvents: [...(m.toolEvents ?? []), event] } : m)));
+  }
+
+  async function openSession(id: string) {
+    setActiveSessionId(id);
+    setLoadingSessionId(id);
+    try {
+      const detail = await getAssistantSession(id);
+      setMessages(turnsToMessages(detail.turns));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không tải được phiên');
+      setActiveSessionId(null);
+      setMessages([]);
+    } finally {
+      setLoadingSessionId(null);
+    }
+  }
+
+  function startNewSession() {
+    setActiveSessionId(null);
+    setMessages([]);
+    setInput('');
+  }
+
+  async function removeSession(id: string, event?: React.MouseEvent) {
+    event?.stopPropagation();
+    if (!confirm('Xoá phiên hội thoại này?')) return;
+    try {
+      await deleteAssistantSession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (activeSessionId === id) startNewSession();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không xoá được phiên');
+    }
+  }
+
+  async function commitRename(id: string) {
+    const title = renameValue.trim();
+    if (!title) {
+      setRenamingId(null);
+      return;
+    }
+    try {
+      const updated = await renameAssistantSession(id, title);
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title: updated.title } : s)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không đổi được tiêu đề');
+    } finally {
+      setRenamingId(null);
+      setRenameValue('');
+    }
   }
 
   async function send(prompt: string) {
@@ -67,6 +180,23 @@ export function AssistantPage() {
     setInput('');
     setStreaming(true);
 
+    // Optimistic: hiện session ngay trong sidebar khi bắt đầu gửi câu hỏi,
+    // sẽ được thay bằng id thật khi backend trả về qua event 'start' hoặc 'done'.
+    let stubId: string | null = null;
+    if (!activeSessionId) {
+      stubId = `stub_${newId()}`;
+      const nowIso = new Date().toISOString();
+      const stub: SavedSessionSummary = {
+        id: stubId,
+        title: trimmed,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        turnCount: 1
+      };
+      setActiveSessionId(stubId);
+      setSessions((prev) => [stub, ...prev]);
+    }
+
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -74,22 +204,43 @@ export function AssistantPage() {
       await streamAssistantChat(
         history,
         {
+          onSessionStart: ({ sessionId }) => {
+            if (sessionId && stubId) {
+              const realId = sessionId;
+              setActiveSessionId(realId);
+              setSessions((prev) => prev.map((s) => (s.id === stubId ? { ...s, id: realId } : s)));
+              stubId = realId;
+            } else if (sessionId && !activeSessionId) {
+              setActiveSessionId(sessionId);
+            }
+          },
           onToken: (delta) => {
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m)));
           },
           onToolCall: (event) => appendToolEvent(assistantId, { type: 'tool_call', name: event.name, args: event.args }),
           onToolResult: (event) => appendToolEvent(assistantId, { type: 'tool_result', name: event.name, result: event.result }),
           onError: (event) => appendToolEvent(assistantId, { type: 'error', code: event.code, message: event.message }),
-          onDone: () => {
+          onDone: (info) => {
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, pending: false } : m)));
+            if (info.sessionId) {
+              setActiveSessionId(info.sessionId);
+              if (stubId && stubId !== info.sessionId) {
+                setSessions((prev) => prev.map((s) => (s.id === stubId ? { ...s, id: info.sessionId! } : s)));
+              }
+              void refreshSessions();
+            }
           }
         },
-        controller.signal
+        { sessionId: activeSessionId, signal: controller.signal }
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Yêu cầu thất bại';
       toast.error(message);
       setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: m.content || `⚠️ ${message}`, pending: false } : m)));
+      if (stubId) {
+        setSessions((prev) => prev.filter((s) => s.id !== stubId));
+        if (activeSessionId === stubId) setActiveSessionId(null);
+      }
     } finally {
       setStreaming(false);
       abortRef.current = null;
@@ -101,6 +252,7 @@ export function AssistantPage() {
   }
 
   function clear() {
+    setActiveSessionId(null);
     setMessages([]);
   }
 
@@ -109,8 +261,60 @@ export function AssistantPage() {
     void send(input);
   }
 
-  return <section className="page-stack assistant-page">
-    <div className="panel">
+  return <section className="assistant-page">
+    <aside className="assistant-sidebar">
+      <div className="assistant-sidebar-head">
+        <strong>Lịch sử</strong>
+        <button type="button" className="secondary" onClick={startNewSession}><MessageSquarePlus size={14} />Mới</button>
+      </div>
+      {sessions.length === 0 && <div className="assistant-sidebar-empty">Chưa có phiên nào.</div>}
+      <ul className="assistant-session-list">
+        {sessions.map((session) => (
+          <li
+            key={session.id}
+            className={session.id === activeSessionId ? 'active' : ''}
+            onClick={() => void openSession(session.id)}
+          >
+            {renamingId === session.id ? (
+              <input
+                autoFocus
+                defaultValue={session.title}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => void commitRename(session.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void commitRename(session.id);
+                  if (e.key === 'Escape') { setRenamingId(null); setRenameValue(''); }
+                }}
+              />
+            ) : (
+              <>
+                <div className="assistant-session-title">{session.title}</div>
+                <div className="assistant-session-meta">
+                  <span>{session.turnCount} turn</span>
+                  <span>{formatRelativeTime(session.updatedAt)}</span>
+                </div>
+              </>
+            )}
+            <div className="assistant-session-actions" onClick={(e) => e.stopPropagation()}>
+              {loadingSessionId === session.id ? (
+                <span className="assistant-session-loading" />
+              ) : (
+                <>
+                  <button type="button" aria-label="Đổi tên" onClick={() => { setRenamingId(session.id); setRenameValue(session.title); }}>
+                    <Pencil size={12} />
+                  </button>
+                  <button type="button" aria-label="Xoá" onClick={(e) => void removeSession(session.id, e)}>
+                    <X size={12} />
+                  </button>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </aside>
+
+    <div className="panel assistant-main">
       <div className="panel-head">
         <div className="assistant-title">
           <Sparkles size={20} />
@@ -120,7 +324,7 @@ export function AssistantPage() {
           </div>
         </div>
         <div className="assistant-actions">
-          <button className="secondary" type="button" onClick={clear} disabled={!messages.length}><Trash2 size={16} />Xóa hội thoại</button>
+          <button className="secondary" type="button" onClick={clear} disabled={!messages.length}><Trash2 size={16} />Xoá hội thoại</button>
         </div>
       </div>
 
@@ -153,7 +357,7 @@ export function AssistantPage() {
               </ul>
             )}
             <div className="chat-content">
-              {message.content || (message.pending ? <span className="typing">Đang suy ngh�...</span> : '')}
+              {message.content || (message.pending ? <span className="typing">Đang suy nghĩ...</span> : '')}
             </div>
           </article>
         ))}

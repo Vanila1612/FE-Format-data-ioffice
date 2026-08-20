@@ -16,6 +16,7 @@ const envSchema = z.object({
   ADMIN_DISPLAY_NAME: z.string().default('System Admin'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  OPENAI_BASE_URL: z.string().optional(),
   AI_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(6)
 });
 

@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { env, isAiEnabled } from '../config/env.js';
 import { AppError } from '../utils/appError.js';
 import { chatTools, executeTool } from './aiTools.js';
+import { recordTurn, type ToolEvent, type TurnUsage } from './aiHistoryService.js';
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -19,11 +20,11 @@ export type ChatMessage = {
 };
 
 export type StreamEvent =
-  | { type: 'start'; model: string }
+  | { type: 'start'; model: string; sessionId: string | null }
   | { type: 'token'; delta: string }
   | { type: 'tool_call'; name: string; args: unknown }
   | { type: 'tool_result'; name: string; result: unknown }
-  | { type: 'done'; totalSteps: number; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } }
+  | { type: 'done'; totalSteps: number; usage?: TurnUsage; sessionId: string | null; turnId: string | null }
   | { type: 'error'; code: string; message: string };
 
 const SYSTEM_PROMPT = `Bạn là trợ lý phân tích dữ liệu của hệ thống iOffice — công cụ rà soát văn bản đi nội bộ.
@@ -48,7 +49,7 @@ function getClient(): OpenAI {
     throw new AppError(503, 'AI_DISABLED', 'Chức năng AI chưa được bật. Vui lòng cấu hình OPENAI_API_KEY trong .env');
   }
   if (!client) {
-    client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+    client = new OpenAI({ apiKey: env.OPENAI_API_KEY, baseURL: env.OPENAI_BASE_URL });
   }
   return client;
 }
@@ -61,7 +62,7 @@ export function isAssistantAvailable(): boolean {
   return isAiEnabled();
 }
 
-export async function streamChat(messages: ChatMessage[], res: Response): Promise<void> {
+export async function streamChat(messages: ChatMessage[], userId: string, sessionId: string | null, res: Response): Promise<void> {
   const openai = getClient();
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -69,8 +70,17 @@ export async function streamChat(messages: ChatMessage[], res: Response): Promis
   res.flushHeaders?.();
   res.write(`retry: 5000\n\n`);
 
+  const capturedToolEvents: ToolEvent[] = [];
+  let finalAssistantContent = '';
+  let lastUserPrompt = '';
+  for (const message of messages) {
+    if (message.role === 'user' && typeof message.content === 'string') lastUserPrompt = message.content;
+  }
+  let currentSessionId: string | null = sessionId;
+  let savedTurnId: string | null = null;
+
   let model = env.OPENAI_MODEL;
-  sendEvent(res, { type: 'start', model });
+  sendEvent(res, { type: 'start', model, sessionId: currentSessionId });
 
   const history: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
   let totalSteps = 0;
@@ -125,6 +135,7 @@ export async function streamChat(messages: ChatMessage[], res: Response): Promis
         toolCalls.push({ id: buffer.id, type: 'function', function: { name: buffer.name, arguments: buffer.args } });
       }
 
+      if (stepContent) finalAssistantContent += stepContent;
       if (toolCalls.length === 0) {
         if (stepContent) {
           history.push({ role: 'assistant', content: stepContent });
@@ -146,10 +157,12 @@ export async function streamChat(messages: ChatMessage[], res: Response): Promis
         }
 
         sendEvent(res, { type: 'tool_call', name: call.function.name, args: parsedArgs });
+        capturedToolEvents.push({ type: 'tool_call', name: call.function.name, args: parsedArgs, at: new Date().toISOString() });
 
         try {
           const result = await executeTool(call.function.name, parsedArgs);
           sendEvent(res, { type: 'tool_result', name: call.function.name, result });
+          capturedToolEvents.push({ type: 'tool_result', name: call.function.name, result, at: new Date().toISOString() });
           history.push({
             role: 'tool',
             name: call.function.name,
@@ -160,6 +173,7 @@ export async function streamChat(messages: ChatMessage[], res: Response): Promis
           const code = error instanceof AppError ? error.code : 'TOOL_EXECUTION_ERROR';
           const message = error instanceof AppError ? error.message : (error instanceof Error ? error.message : 'Tool execution failed');
           sendEvent(res, { type: 'error', code, message });
+          capturedToolEvents.push({ type: 'error', name: call.function.name, code, message, at: new Date().toISOString() });
           history.push({
             role: 'tool',
             name: call.function.name,
@@ -170,15 +184,57 @@ export async function streamChat(messages: ChatMessage[], res: Response): Promis
       }
     }
 
-    sendEvent(res, { type: 'done', totalSteps, usage: totalUsage });
+    if (lastUserPrompt && finalAssistantContent && !savedTurnId) {
+      try {
+        const saved = await recordTurn({
+          userId,
+          sessionId: currentSessionId,
+          prompt: lastUserPrompt,
+          response: finalAssistantContent,
+          model,
+          toolEvents: capturedToolEvents,
+          usage: { ...totalUsage, totalSteps }
+        });
+        currentSessionId = saved.sessionId;
+        savedTurnId = saved.turnId;
+      } catch (persistError) {
+        console.error('Failed to persist assistant turn:', persistError);
+      }
+    }
+    if (currentSessionId && savedTurnId) {
+      sendEvent(res, { type: 'done', totalSteps, usage: { ...totalUsage, totalSteps }, sessionId: currentSessionId, turnId: savedTurnId });
+    } else {
+      sendEvent(res, { type: 'done', totalSteps, usage: { ...totalUsage, totalSteps }, sessionId: currentSessionId, turnId: null });
+    }
     res.end();
   } catch (error) {
     const code = error instanceof AppError ? error.code : 'AI_REQUEST_FAILED';
     const message = error instanceof AppError
       ? error.message
       : (error instanceof Error ? error.message : 'AI request failed');
+    if (lastUserPrompt && finalAssistantContent && !savedTurnId) {
+      try {
+        const saved = await recordTurn({
+          userId,
+          sessionId: currentSessionId,
+          prompt: lastUserPrompt,
+          response: finalAssistantContent,
+          model,
+          toolEvents: capturedToolEvents,
+          usage: { ...totalUsage, totalSteps }
+        });
+        currentSessionId = saved.sessionId;
+        savedTurnId = saved.turnId;
+      } catch (persistError) {
+        console.error('Failed to persist assistant turn:', persistError);
+      }
+    }
     sendEvent(res, { type: 'error', code, message });
-    sendEvent(res, { type: 'done', totalSteps, usage: totalUsage });
+    if (currentSessionId && savedTurnId) {
+      sendEvent(res, { type: 'done', totalSteps, usage: { ...totalUsage, totalSteps }, sessionId: currentSessionId, turnId: savedTurnId });
+    } else {
+      sendEvent(res, { type: 'done', totalSteps, usage: { ...totalUsage, totalSteps }, sessionId: currentSessionId, turnId: null });
+    }
     res.end();
   }
 }

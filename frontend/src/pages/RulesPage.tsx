@@ -15,6 +15,19 @@ export function RulesPage() {
   const create = useMutation({ mutationFn: async () => unwrap(await api.post('/rules', form)), onSuccess: async () => { toast.success('Đã tạo quy tắc'); setForm(emptyForm); await queryClient.invalidateQueries({ queryKey: ['rules'] }); }, onError: (error) => toast.error(error.message) });
   const update = useMutation({ mutationFn: async (rule: ClassificationRule) => unwrap(await api.put(`/rules/${rule.id}`, { keyword: rule.keyword, documentGroup: rule.documentGroup })), onSuccess: async () => { toast.success('Đã cập nhật quy tắc'); setEditing(null); await queryClient.invalidateQueries({ queryKey: ['rules'] }); }, onError: (error) => toast.error(error.message) });
   const remove = useMutation({ mutationFn: async (id: string) => unwrap(await api.delete(`/rules/${id}`)), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rules'] }) });
+  const reprocessAll = useMutation({
+  mutationFn: async () => unwrap<{ processed: number; results: Array<{ id: string; status: 'ok' | 'error'; count: number; error?: string }> }>(await api.post('/imports/reprocess-all')),
+  onSuccess: async (data) => {
+    const ok = data.results.filter((r) => r.status === 'ok').length;
+    const failed = data.results.filter((r) => r.status === 'error').length;
+    if (failed === 0) toast.success(`Đã áp dụng lại quy tắc cho ${ok}/${data.processed} lần nhập`);
+    else toast.warning(`Đã xử lý ${ok} lần nhập, ${failed} lỗi. Xem log để biết chi tiết.`);
+    await queryClient.invalidateQueries({ queryKey: ['rules'] });
+    await queryClient.invalidateQueries({ queryKey: ['imports'] });
+  },
+  onError: (error) => toast.error(error.message)
+});
+
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -26,7 +39,7 @@ export function RulesPage() {
 
   return <section className="page-stack">
     <div className="panel">
-      <form className="form-grid" onSubmit={submit}><input required placeholder="Từ khóa (BC, TTr, CV...)" value={form.keyword} onChange={(event) => setForm({ ...form, keyword: event.target.value })} /><select value={form.documentGroup} onChange={(event) => setForm({ ...form, documentGroup: event.target.value as DocumentGroup })}>{Object.entries(groupLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button disabled={create.isPending}>Tạo quy tắc</button></form>
+      <form className="form-grid" onSubmit={submit}><input required placeholder="Từ khóa (BC, TTr, CV...)" value={form.keyword} onChange={(event) => setForm({ ...form, keyword: event.target.value })} /><select value={form.documentGroup} onChange={(event) => setForm({ ...form, documentGroup: event.target.value as DocumentGroup })}>{Object.entries(groupLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><button disabled={create.isPending}>Tạo quy tắc</button><button type="button" className="secondary" onClick={() => confirm('Áp dụng lại quy tắc cho tất cả các lần nhập đã có?') && reprocessAll.mutate()} disabled={reprocessAll.isPending}>{reprocessAll.isPending ? 'Đang áp dụng...' : 'Áp dụng lại cho các import đã có'}</button></form>
     </div>
     {editing && <div className="panel">
       <p className="form-note">Đang sửa quy tắc “{editing.keyword}”.</p>

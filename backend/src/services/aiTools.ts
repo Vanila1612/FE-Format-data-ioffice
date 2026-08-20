@@ -55,7 +55,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'get_top_units_by_completion',
-      description: 'Trả về top N đơn vị xếp hạng theo TỶ LỆ xử lý xong văn bản (đã ký số). Mỗi đơn vị kèm t�ng văn bản và tỷ lệ đã ký. Mặc định sắp xếp theo totalRate giảm dần, hỗ trợ lọc theo khoảng ngày ban hành.',
+      description: 'DÙNG KHI user hỏi về TỶ LỆ KÝ. Các từ khóa đặc trưng: "tỷ lệ ký", "hiệu suất xử lý", "xử lý xong" ở nghĩa đã ký/hoàn tất, tỷ lệ hoàn thành, % đã ký. Sắp xếp ưu tiên theo signRate giảm dần, tie-break bởi tổng văn bản. KHÔNG dùng khi user nói "nhiều nhất", "phát hành nhiều" — khi đó dùng get_top_units_by_volume.',
       parameters: {
         type: 'object',
         properties: {
@@ -71,7 +71,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'get_top_units_by_volume',
-      description: 'Trả về top N đơn vị có tổng số văn bản ban hành nhiều nhất (kèm số đã ký và tỷ lệ).',
+      description: 'DÙNG KHI user hỏi về TỔNG SỐ VĂN BẢN đã phát hành. Các từ khóa đặc trưng: "nhiều nhất", "phát hành nhiều", "ban hành nhiều", "số lượng văn bản", "xử lý xong" ở nghĩa đã phát hành (không quan tâm ký hay chưa). Sắp xếp theo totalDocuments giảm dần. Kèm thêm tỷ lệ ký nhưng KHÔNG dùng để xếp hạng tỷ lệ.',
       parameters: {
         type: 'object',
         properties: {
@@ -86,7 +86,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'get_document_groups_breakdown',
-      description: 'Trả về phân bổ số lượng và tỷ lệ đã ký theo 3 nhóm văn bản: Báo cáo/Tờ trình, Công văn/Ủy quyền, Thư công tác. Hỗ trợ lọc theo khoảng ngày.',
+      description: 'DÙNG KHI user hỏi về PHÂN BỔ THEO NHÓM văn bản. Các từ khóa đặc trưng: "theo nhóm", "3 nhóm", "Báo cáo/Tờ trình", "Công văn/Ủy quyền", "Thư công tác", "tỷ lệ ký của từng nhóm". Trả về 3 nhóm cố định, kèm tổng số, tỷ lệ ký và share. KHÔNG dùng khi user muốn xem chi tiết từng đơn vị — dùng get_top_units_by_*.',
       parameters: {
         type: 'object',
         properties: { ...dateRange.properties },
@@ -98,7 +98,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'get_report_summary',
-      description: 'Trả về tóm tắt tổng quan (tổng văn bản, đã ký, chưa ký, tỷ lệ ký, top đơn vị) theo bộ lọc.',
+      description: 'DÙNG KHI user hỏi về TỔNG QUAN / ĐẾM SỐ chung. Các từ khóa đặc trưng: "tổng có bao nhiêu", "bao nhiêu văn bản", "tổng kết", "tóm tắt", "tổng quan", "dashboard". Trả về 4 số tổng: tổng văn bản, đã ký, chưa ký, tỷ lệ ký. Hỗ trợ filter importId/unit/group/search/date. KHÔNG dùng khi user muốn xếp hạng top — dùng get_top_units_by_*.',
       parameters: {
         type: 'object',
         properties: {
@@ -116,7 +116,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'get_completion_trend',
-      description: 'Trả về xu hướng xử lý văn bản theo thời gian: tổng văn bản, số đã ký, tỷ lệ ký. Bucket: day hoặc month.',
+      description: 'DÙNG KHI user hỏi về XU HƯỚNG / BIẾN ĐỘNG theo thời gian. Các từ khóa đặc trưng: "xu hướng", "theo tháng", "theo tuần", "theo ngày", "6 tháng gần nhất", "diễn biến", "tăng hay giảm". Bucket: day hoặc month. KHÔNG dùng khi user chỉ muốn 1 con số tổng — dùng get_report_summary.',
       parameters: {
         type: 'object',
         properties: {
@@ -131,7 +131,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'search_documents',
-      description: 'Tìm văn bản theo từ khoá trên trích yếu, số ký hiệu, đơn vị ban hành hoặc đơn vị chu�n hoá. Trả tối đa `limit` kết quả, sắp theo ngày ban hành giảm dần.',
+      description: 'DÙNG KHI user muốn TÌM VĂN BẢN CỤ THỂ bằng từ khóa / số hiệu / trích yếu. Các từ khóa đặc trưng: "tìm văn bản", "tìm kiếm", "văn bản có số", "trích yếu chứa", "văn bản về chủ đề". Tìm trên summary, referenceNumber, issuingUnit, normalizedUnit. KHÔNG dùng khi user đã chỉ định đơn vị — dùng get_documents_by_unit nhanh hơn.',
       parameters: {
         type: 'object',
         properties: {
@@ -148,7 +148,7 @@ export const chatTools: ChatTool[] = [
     type: 'function',
     function: {
       name: 'get_documents_by_unit',
-      description: 'Liệt kê văn bản của một đơn vị cụ thể (theo normalizedUnit contains). Hữu ích khi người dùng h�i chi tiết một đơn vị đã xếp hạng ở trên.',
+      description: 'DÙNG KHI user đã biết ĐƠN VỊ cụ thể và muốn xem văn bản của đơn vị đó. Các từ khóa đặc trưng: "của đơn vị X", "đơn vị X phát hành", "văn bản của X", "liệt kê của X", "của ALCO", "của Hội sở", "của Chi nhánh Cần Thơ". Lọc theo normalizedUnit contains. KHÔNG dùng khi user muốn xếp hạng nhiều đơn vị — dùng get_top_units_by_*.',
       parameters: {
         type: 'object',
         properties: {
