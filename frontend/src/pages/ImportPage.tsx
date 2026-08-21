@@ -1,10 +1,12 @@
 import { ChangeEvent, useMemo, useState } from 'react';
-import { CheckCircle2, FileUp, RotateCcw } from 'lucide-react';
+import { CheckCircle2, FileUp, RotateCcw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { api, unwrap } from '../services/api';
 import { groupLabels, numberText } from '../utils/format';
 import { parseLocalExcel, type LocalImportResult, type ResultBoardRow } from '../utils/localImport';
+import { SignerBoardTable } from '../components/SignerBoardTable';
+import { SortHeader, type SortDir } from '../components/SortHeader';
 
 export function ImportPage() {
   const navigate = useNavigate();
@@ -134,39 +136,119 @@ function LocalResult({ result, rows, query, setQuery, group, setGroup }: {
       </div>
       <ResultBoardTable rows={rows} />
     </div>
+
+    <div className="panel">
+      <div className="panel-head">
+        <div>
+          <h2>THỐNG KÊ VĂN BẢN ĐI THEO NGƯỜI KÝ CHÍNH</h2>
+          <p>{result.signerBoardRows.length} người ký chính trong file vừa đọc.</p>
+        </div>
+      </div>
+      <SignerBoardTable rows={result.signerBoardRows} />
+    </div>
   </>;
 }
 
+type ResultSortKey =
+  | 'stt' | 'unit'
+  | 'reportSigned' | 'reportTotal' | 'reportRate'
+  | 'letterSigned' | 'letterTotal' | 'letterRate'
+  | 'workSigned' | 'workTotal' | 'workRate'
+  | 'totalSigned' | 'totalDocuments' | 'totalRate';
+type ResultSortState = { key: ResultSortKey; dir: SortDir };
+
+const RESULT_FIELDS: Record<ResultSortKey, (row: ResultBoardRow) => string | number> = {
+  stt: (row) => row.stt,
+  unit: (row) => row.unit,
+  reportSigned: (row) => row.reportSigned, reportTotal: (row) => row.reportTotal, reportRate: (row) => row.reportRate,
+  letterSigned: (row) => row.letterSigned, letterTotal: (row) => row.letterTotal, letterRate: (row) => row.letterRate,
+  workSigned: (row) => row.workSigned, workTotal: (row) => row.workTotal, workRate: (row) => row.workRate,
+  totalSigned: (row) => row.totalSigned, totalDocuments: (row) => row.totalDocuments, totalRate: (row) => row.totalRate
+};
+
+const RESULT_IS_TEXT: Record<ResultSortKey, boolean> = {
+  stt: false, unit: true,
+  reportSigned: false, reportTotal: false, reportRate: false,
+  letterSigned: false, letterTotal: false, letterRate: false,
+  workSigned: false, workTotal: false, workRate: false,
+  totalSigned: false, totalDocuments: false, totalRate: false
+};
+
 export function ResultBoardTable({ rows }: { rows: ResultBoardRow[] }) {
-  return <div className="table-scroll result-board">
+  const [sort, setSort] = useState<ResultSortState>({ key: 'stt', dir: 'asc' });
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((row) => row.unit.toLowerCase().includes(needle));
+  }, [rows, search]);
+
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    const field = RESULT_FIELDS[sort.key];
+    const av = field(a);
+    const bv = field(b);
+    if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv, 'vi') * (sort.dir === 'asc' ? 1 : -1);
+    return (Number(av) - Number(bv)) * (sort.dir === 'asc' ? 1 : -1);
+  }), [filtered, sort]);
+
+  function toggle(key: ResultSortKey) {
+    setSort((current) => {
+      if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' };
+      return { key, dir: RESULT_IS_TEXT[key] ? 'asc' : 'desc' };
+    });
+  }
+
+  const h = (label: string, key: ResultSortKey, align: 'left' | 'center' = 'center') => (
+    <SortHeader label={label} active={sort.key === key} dir={sort.dir} onClick={() => toggle(key)} align={align} />
+  );
+
+  return <div className="panel-stack">
+    <div className="toolbar signer-search">
+      <Search size={16} aria-hidden="true" />
+      <input
+        type="search"
+        placeholder={`Tìm trong ${numberText(rows.length)} đơn vị`}
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        aria-label="Tìm đơn vị"
+      />
+      {search && <button type="button" className="secondary" onClick={() => setSearch('')}>Xóa</button>}
+      <span className="muted">{numberText(sorted.length)}/{numberText(rows.length)} đơn vị</span>
+    </div>
+
+    {sorted.length === 0 ? (
+      <div className="state empty-state"><strong>Không tìm thấy đơn vị phù hợp với “{search}”</strong></div>
+    ) : (
+      <div className="table-scroll result-board">
     <table>
       <thead>
         <tr>
-          <th rowSpan={2}>STT</th>
-          <th rowSpan={2}>Đơn vị</th>
+          <th rowSpan={2}>{h('STT', 'stt')}</th>
+          <th rowSpan={2}>{h('Đơn vị', 'unit', 'left')}</th>
           <th colSpan={3}>1.1 Báo cáo/Tờ trình</th>
           <th colSpan={3}>1.4 Công văn / Ủy quyền</th>
           <th colSpan={3}>1.3 Thư công tác</th>
           <th colSpan={3}>Tổng văn bản</th>
         </tr>
         <tr>
-          <th>Đã ký</th>
-          <th>Tổng</th>
-          <th>Tỷ lệ</th>
-          <th>Đã ký</th>
-          <th>Tổng</th>
-          <th>Tỷ lệ</th>
-          <th>Đã ký</th>
-          <th>Tổng</th>
-          <th>Tỷ lệ</th>
-          <th>Đã ký</th>
-          <th>Tổng</th>
-          <th>Tỷ lệ</th>
+          <th>{h('Đã ký', 'reportSigned')}</th>
+          <th>{h('Tổng', 'reportTotal')}</th>
+          <th>{h('Tỷ lệ', 'reportRate')}</th>
+          <th>{h('Đã ký', 'letterSigned')}</th>
+          <th>{h('Tổng', 'letterTotal')}</th>
+          <th>{h('Tỷ lệ', 'letterRate')}</th>
+          <th>{h('Đã ký', 'workSigned')}</th>
+          <th>{h('Tổng', 'workTotal')}</th>
+          <th>{h('Tỷ lệ', 'workRate')}</th>
+          <th>{h('Đã ký', 'totalSigned')}</th>
+          <th>{h('Tổng', 'totalDocuments')}</th>
+          <th>{h('Tỷ lệ', 'totalRate')}</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => <tr key={row.unit}>
-          <td>{row.stt}</td>
+        {sorted.map((row, index) => <tr key={row.unit}>
+          <td>{index + 1}</td>
           <td>{row.unit}</td>
           <MetricCells signed={row.reportSigned} total={row.reportTotal} rate={row.reportRate} />
           <MetricCells signed={row.letterSigned} total={row.letterTotal} rate={row.letterRate} />
@@ -174,7 +256,8 @@ export function ResultBoardTable({ rows }: { rows: ResultBoardRow[] }) {
           <MetricCells signed={row.totalSigned} total={row.totalDocuments} rate={row.totalRate} />
         </tr>)}
       </tbody>
-    </table>
+    </table></div>
+    )}
   </div>;
 }
 

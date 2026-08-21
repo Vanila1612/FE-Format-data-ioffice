@@ -15,6 +15,7 @@ export type NormalizedDocumentInput = {
   summary: string;
   referenceNumber: string;
   signedDocument: string;
+  signerName: string;
   issueDate: Date | null;
   issuingUnit: string;
   normalizedUnit: string;
@@ -132,12 +133,29 @@ export function normalizeNhnoReferenceUnit(referenceNumber: string, mappings: Pi
   return mapping ? normalizeText(mapping.normalizedName) : null;
 }
 
+/** Reads the "Người ký chính" column whether the workbook uses the legacy uppercase
+ *  header (`NGUOI_KY_CHINH`) or the new Vietnamese label. Missing values resolve
+ *  to an empty string so existing imports keep working. */
+function readSignerName(row: RawExcelRow): string {
+  const direct = row['Người ký chính'] ?? row['NGUOI_KY_CHINH'];
+  if (direct !== undefined && direct !== null && String(direct).trim() !== '') return normalizeText(direct);
+  for (const [key, value] of Object.entries(row)) {
+    if (!key) continue;
+    const normalized = normalizeHeader(key);
+    if (normalized === 'nguoi_ky_chinh' || normalized === 'nguoi ky chinh' || normalized === 'người ký chính') {
+      return normalizeText(value);
+    }
+  }
+  return '';
+}
+
 export function normalizeDocument(row: RawExcelRow, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[]): NormalizedDocumentInput {
   const issuingUnit = normalizeText(row['Đơn vị ban hành']);
   return {
     summary: normalizeText(row['Trích yếu']),
     referenceNumber: normalizeText(row['Số ký hiệu']),
     signedDocument: normalizeText(row['Văn bản ký số']),
+    signerName: readSignerName(row),
     issueDate: parseExcelDate(row['Ngày ban hành']),
     issuingUnit,
     normalizedUnit: normalizeUnit(issuingUnit, mappings),

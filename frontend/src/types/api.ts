@@ -32,6 +32,7 @@ export type DocumentRecord = {
   summary: string;
   referenceNumber: string;
   signedDocument: string;
+  signerName?: string;
   issueDate?: string;
   issuingUnit: string;
   normalizedUnit: string;
@@ -51,6 +52,15 @@ export type Summary = {
   byGroup: { key: DocumentGroup; label: string; total: number }[];
   byUnit: { unit: string; total: number; signed: number; unsigned: number; signRate: number }[];
   boardRows: ResultBoardRow[];
+  signerBoardRows?: SignerBoardRow[];
+};
+
+export type SignerBoardRow = {
+  stt: number;
+  signer: string;
+  totalDocuments: number;
+  signed: number;
+  signRate: number;
 };
 
 export type ResultBoardRow = {

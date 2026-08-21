@@ -3,13 +3,13 @@ import path from 'node:path';
 import XLSX from 'xlsx';
 
 const rows = [
-  { 'Trích yếu': 'Báo cáo hoạt động', 'Số ký hiệu': '01/BC-ALCO', 'Văn bản ký số': 'Đã ký số', 'Ngày ban hành': '01/08/2026', 'Đơn vị ban hành': 'ALCO' },
-  { 'Trích yếu': 'Tờ trình phê duyệt', 'Số ký hiệu': '02/TTr-BAN', 'Văn bản ký số': 'Đã ký số', 'Ngày ban hành': '02/08/2026', 'Đơn vị ban hành': 'Ban Khách hàng doanh nghiệp' },
-  { 'Trích yếu': 'Công văn chỉ đạo', 'Số ký hiệu': '03/CV-CN', 'Văn bản ký số': '', 'Ngày ban hành': '03/08/2026', 'Đơn vị ban hành': 'Chi nhánh mẫu' },
-  { 'Trích yếu': 'Ủy quyền nội bộ', 'Số ký hiệu': '04/UQ-CN', 'Văn bản ký số': 'Đã ký số', 'Ngày ban hành': '04/08/2026', 'Đơn vị ban hành': 'Chi nhánh mẫu' },
-  { 'Trích yếu': 'Thư công tác', 'Số ký hiệu': '05/TB-VP', 'Văn bản ký số': '', 'Ngày ban hành': '05/08/2026', 'Đơn vị ban hành': 'Văn phòng Trụ sở chính' },
-  { 'Trích yếu': 'NHNo special case', 'Số ký hiệu': '12969/NHNo-ALCO', 'Văn bản ký số': 'Đã ký số', 'Ngày ban hành': '06/08/2026', 'Đơn vị ban hành': 'NHNo' },
-  { 'Trích yếu': 'Agribank special case', 'Số ký hiệu': '07/BC-TSC', 'Văn bản ký số': 'Đã ký số', 'Ngày ban hành': '07/08/2026', 'Đơn vị ban hành': 'Agribank' }
+  { 'Trích yếu': 'Báo cáo hoạt động', 'Số ký hiệu': '01/BC-ALCO', 'Văn bản ký số': 'Đã ký số', 'Người ký chính': 'Nguyễn Văn A', 'Ngày ban hành': '01/08/2026', 'Đơn vị ban hành': 'ALCO' },
+  { 'Trích yếu': 'Tờ trình phê duyệt', 'Số ký hiệu': '02/TTr-BAN', 'Văn bản ký số': 'Đã ký số', 'Người ký chính': 'Trần Thị B', 'Ngày ban hành': '02/08/2026', 'Đơn vị ban hành': 'Ban Khách hàng doanh nghiệp' },
+  { 'Trích yếu': 'Công văn chỉ đạo', 'Số ký hiệu': '03/CV-CN', 'Văn bản ký số': '', 'Người ký chính': '', 'Ngày ban hành': '03/08/2026', 'Đơn vị ban hành': 'Chi nhánh mẫu' },
+  { 'Trích yếu': 'Ủy quyền nội bộ', 'Số ký hiệu': '04/UQ-CN', 'Văn bản ký số': 'Đã ký số', 'Người ký chính': 'Lê Văn C', 'Ngày ban hành': '04/08/2026', 'Đơn vị ban hành': 'Chi nhánh mẫu' },
+  { 'Trích yếu': 'Thư công tác', 'Số ký hiệu': '05/TB-VP', 'Văn bản ký số': '', 'Người ký chính': 'Phạm Thị D', 'Ngày ban hành': '05/08/2026', 'Đơn vị ban hành': 'Văn phòng Trụ sở chính' },
+  { 'Trích yếu': 'NHNo special case', 'Số ký hiệu': '12969/NHNo-ALCO', 'Văn bản ký số': 'Đã ký số', 'Người ký chính': 'Hoàng Văn E', 'Ngày ban hành': '06/08/2026', 'Đơn vị ban hành': 'NHNo' },
+  { 'Trích yếu': 'Agribank special case', 'Số ký hiệu': '07/BC-TSC', 'Văn bản ký số': 'Đã ký số', 'Người ký chính': 'Đỗ Thị F', 'Ngày ban hành': '07/08/2026', 'Đơn vị ban hành': 'Agribank' }
 ];
 
 const workbook = XLSX.utils.book_new();

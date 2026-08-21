@@ -8,6 +8,7 @@ type SnapshotSourceDocument = {
   summary: string;
   referenceNumber: string;
   signedDocument: string;
+  signerName: string;
   issueDate: Date | null;
   issuingUnit: string;
   normalizedUnit: string;
@@ -22,6 +23,7 @@ export function snapshotDocumentInput(snapshotId: string, document: SnapshotSour
     summary: document.summary,
     referenceNumber: document.referenceNumber,
     signedDocument: document.signedDocument,
+    signerName: document.signerName,
     issueDate: document.issueDate,
     issuingUnit: document.issuingUnit,
     normalizedUnit: document.normalizedUnit,

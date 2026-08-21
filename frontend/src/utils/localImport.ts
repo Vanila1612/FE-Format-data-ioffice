@@ -6,6 +6,7 @@ export type LocalDocument = {
   summary: string;
   referenceNumber: string;
   signedDocument: string;
+  signerName: string;
   issueDate: string;
   issuingUnit: string;
   normalizedUnit: string;
@@ -27,6 +28,15 @@ export type LocalImportResult = {
     to: string;
   };
   boardRows: ResultBoardRow[];
+  signerBoardRows: SignerBoardRow[];
+};
+
+export type SignerBoardRow = {
+  stt: number;
+  signer: string;
+  totalDocuments: number;
+  signed: number;
+  signRate: number;
 };
 
 
@@ -193,7 +203,8 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
       missingColumns: missingColumns(candidate),
       totals: { total: 0, signed: 0, unsigned: 0, signRate: 0 },
       period: { from: '', to: '' },
-      boardRows: []
+      boardRows: [],
+      signerBoardRows: []
     };
   }
 
@@ -207,6 +218,7 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
       const summary = clean(rawData['Trích yếu']);
       const referenceNumber = clean(rawData['Số ký hiệu']);
       const signedDocument = clean(rawData['Văn bản ký số']);
+      const signerName = clean(rawData['Người ký chính'] ?? rawData['NGUOI_KY_CHINH'] ?? '');
       const issuingUnit = clean(rawData['Đơn vị ban hành']);
       const classified = classify(referenceNumber, issuingUnit);
       return {
@@ -214,6 +226,7 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
         summary,
         referenceNumber,
         signedDocument,
+        signerName,
         issueDate: formatExcelDate(rawData['Ngày ban hành']),
         issuingUnit,
         normalizedUnit: classified.normalizedUnit ?? normalizeUnitName(issuingUnit),
@@ -239,8 +252,28 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
       from: dates[0] || '',
       to: dates.at(-1) || ''
     },
-    boardRows: buildResultBoard(reportableDocuments)
+    boardRows: buildResultBoard(reportableDocuments),
+    signerBoardRows: buildSignerBoard(reportableDocuments)
   };
+}
+
+export function buildSignerBoard(documents: LocalDocument[]): SignerBoardRow[] {
+  const map = new Map<string, { signer: string; totalDocuments: number; signed: number }>();
+  for (const document of documents) {
+    const name = (document.signerName || '').trim();
+    if (!name) continue;
+    if (!map.has(name)) map.set(name, { signer: name, totalDocuments: 0, signed: 0 });
+    const row = map.get(name)!;
+    row.totalDocuments += 1;
+    if (isSigned(document.signedDocument)) row.signed += 1;
+  }
+  return [...map.values()]
+    .sort((a, b) => b.totalDocuments - a.totalDocuments || a.signer.localeCompare(b.signer, 'vi'))
+    .map((row, index) => ({
+      stt: index + 1,
+      ...row,
+      signRate: row.totalDocuments ? Number(((row.signed / row.totalDocuments) * 100).toFixed(1)) : 0
+    }));
 }
 
 

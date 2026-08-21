@@ -68,6 +68,7 @@ model Document {
   summary         String
   referenceNumber String
   signedDocument  String
+  signerName      String        @default("")
   issueDate       DateTime?
   issuingUnit     String
   normalizedUnit  String
@@ -154,6 +155,7 @@ model SnapshotDocument {
   summary            String
   referenceNumber    String
   signedDocument     String
+  signerName         String        @default("")
   issueDate          DateTime?
   issuingUnit        String
   normalizedUnit     String

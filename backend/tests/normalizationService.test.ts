@@ -16,10 +16,33 @@ describe('normalizationService', () => {
       'Trích yếu': 'A',
       'Số ký hiệu': '1/CV-ALCO',
       'Văn bản ký số': 'Đã ký số',
+      'Người ký chính': 'Nguyễn Văn A',
       'Ngày ban hành': '13/08/2026',
       'Đơn vị ban hành': '  ALCO  '
     }, [{ sourceName: 'ALCO', normalizedName: 'Asset Liability Committee', enabled: true }]);
     expect(document.normalizedUnit).toBe('Asset Liability Committee');
+    expect(document.signerName).toBe('Nguyễn Văn A');
+  });
+
+  it('reads the signer name from both legacy and new header spellings', () => {
+    const legacyHeader = normalizeDocument({
+      'Trích yếu': 'A',
+      'Số ký hiệu': '1/CV-ALCO',
+      'Văn bản ký số': '',
+      'NGUOI_KY_CHINH': 'nguyenvana',
+      'Ngày ban hành': '13/08/2026',
+      'Đơn vị ban hành': 'ALCO'
+    }, []);
+    expect(legacyHeader.signerName).toBe('nguyenvana');
+
+    const missingHeader = normalizeDocument({
+      'Trích yếu': 'A',
+      'Số ký hiệu': '1/CV-ALCO',
+      'Văn bản ký số': '',
+      'Ngày ban hành': '13/08/2026',
+      'Đơn vị ban hành': 'ALCO'
+    }, []);
+    expect(missingHeader.signerName).toBe('');
   });
 
   it('detects signed documents', () => {

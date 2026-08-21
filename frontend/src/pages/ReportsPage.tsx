@@ -6,14 +6,20 @@ import type { ImportRecord, Summary } from '../types/api';
 import { numberText } from '../utils/format';
 import { EmptyState, ErrorState, LoadingState } from '../components/State';
 import { ResultBoardTable } from './ImportPage';
+import { SignerBoardTable } from '../components/SignerBoardTable';
 
 export function ReportsPage() {
   const queryClient = useQueryClient();
   const [importId, setImportId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // UI state (what the user has typed/picked)
+  const [fromInput, setFromInput] = useState('');
+  const [toInput, setToInput] = useState('');
+  // Applied state (what's actually used to query)
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo] = useState('');
   const [snapshotName, setSnapshotName] = useState('');
-  const filters = { importId: importId || undefined, from: from || undefined, to: to || undefined };
+
+  const filters = { importId: importId || undefined, from: appliedFrom || undefined, to: appliedTo || undefined };
   const imports = useQuery({ queryKey: ['imports-for-report'], queryFn: async () => unwrap<ImportRecord[]>(await api.get('/imports')) });
   const report = useQuery({ queryKey: ['summary', filters], queryFn: async () => unwrap<Summary>(await api.get('/reports/summary', { params: filters })) });
   const createSnapshot = useMutation({
@@ -22,20 +28,61 @@ export function ReportsPage() {
     onError: (error) => toast.error(error.message)
   });
 
+  function applyDateFilter() {
+    if (fromInput && toInput && fromInput > toInput) {
+      toast.error('Ngày bắt đầu phải trước ngày kết thúc');
+      return;
+    }
+    setAppliedFrom(fromInput);
+    setAppliedTo(toInput);
+  }
+
+  function clearAllFilters() {
+    setImportId('');
+    setFromInput('');
+    setToInput('');
+    setAppliedFrom('');
+    setAppliedTo('');
+  }
+
   if (imports.isLoading || report.isLoading) return <LoadingState />;
   if (imports.isError || report.isError) return <ErrorState message={(imports.error || report.error)!.message} retry={() => { void imports.refetch(); void report.refetch(); }} />;
   const data = report.data!;
   const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)).map(([key, value]) => [key, String(value)])).toString();
+  const hasPendingDateChange = fromInput !== appliedFrom || toInput !== appliedTo;
 
   return <section className="page-stack">
     <div className="panel report-filter">
       <div><h2>Phạm vi thống kê</h2><p>Chọn một lần nhập hoặc thống kê toàn bộ văn bản; có thể giới hạn theo ngày ban hành.</p></div>
-      <div className="toolbar"><select value={importId} onChange={(event) => setImportId(event.target.value)}><option value="">Tất cả lần nhập</option>{imports.data!.map((item) => <option key={item.id} value={item.id}>{item.originalFileName}</option>)}</select><label>Từ ngày <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label><label>Đến ngày <input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label><button className="secondary" onClick={() => { setImportId(''); setFrom(''); setTo(''); }}>Tất cả dữ liệu</button><button className="secondary" onClick={() => void downloadFile(`/reports/export?${query}`).catch((error) => toast.error(error.message))}>Xuất Excel</button></div>
+      <div className="toolbar">
+        <select value={importId} onChange={(event) => setImportId(event.target.value)}>
+          <option value="">Tất cả lần nhập</option>
+          {imports.data!.map((item) => <option key={item.id} value={item.id}>{item.originalFileName}</option>)}
+        </select>
+        <label>Từ ngày <input type="date" value={fromInput} onChange={(event) => setFromInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') applyDateFilter(); }} /></label>
+        <label>Đến ngày <input type="date" value={toInput} onChange={(event) => setToInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') applyDateFilter(); }} /></label>
+        <button onClick={applyDateFilter} disabled={!hasPendingDateChange}>Áp dụng</button>
+        <button className="secondary" onClick={clearAllFilters}>Tất cả dữ liệu</button>
+        <button className="secondary" onClick={() => void downloadFile(`/reports/export?${query}`).catch((error) => toast.error(error.message))}>Xuất Excel</button>
+      </div>
     </div>
     <div className="kpi-grid"><Kpi label="Tổng văn bản" value={data.totals.total} /><Kpi label="Đã ký số" value={data.totals.signed} /><Kpi label="Chưa ký số" value={data.totals.unsigned} /><Kpi label="Tỷ lệ ký" value={`${data.totals.signRate}%`} /></div>
     <div className="panel">
-      <div className="panel-head"><div><h2>THỐNG KÊ VĂN BẢN ĐI THEO ĐƠN VỊ</h2><p>{from || to ? `Lọc ngày: ${from || 'đầu kỳ'} – ${to || 'hiện tại'}` : 'Toàn bộ dữ liệu theo phạm vi đã chọn'}</p></div><div className="snapshot-create"><input placeholder="Tên kết quả lưu (không bắt buộc)" value={snapshotName} onChange={(event) => setSnapshotName(event.target.value)} /><button disabled={createSnapshot.isPending || !data.totals.total} onClick={() => createSnapshot.mutate()}>{createSnapshot.isPending ? 'Đang lưu…' : 'Lưu kết quả thống kê'}</button></div></div>
+      <div className="panel-head">
+        <div>
+          <h2>THỐNG KÊ VĂN BẢN ĐI THEO ĐƠN VỊ</h2>
+          <p>{appliedFrom || appliedTo ? `Lọc ngày: ${appliedFrom || 'đầu kỳ'} – ${appliedTo || 'hiện tại'}` : 'Toàn bộ dữ liệu theo phạm vi đã chọn'}</p>
+        </div>
+        <div className="snapshot-create">
+          <input placeholder="Tên kết quả lưu (không bắt buộc)" value={snapshotName} onChange={(event) => setSnapshotName(event.target.value)} />
+          <button disabled={createSnapshot.isPending || !data.totals.total} onClick={() => createSnapshot.mutate()}>{createSnapshot.isPending ? 'Đang lưu…' : 'Lưu kết quả thống kê'}</button>
+        </div>
+      </div>
       {data.boardRows.length === 0 ? <EmptyState /> : <ResultBoardTable rows={data.boardRows} />}
+    </div>
+    <div className="panel">
+      <div className="panel-head"><div><h2>THỐNG KÊ VĂN BẢN ĐI THEO NGƯỜI KÝ CHÍNH</h2><p>{data.signerBoardRows?.length || 0} người ký chính trong phạm vi đã chọn.</p></div></div>
+      <SignerBoardTable rows={data.signerBoardRows || []} />
     </div>
   </section>;
 }

@@ -27,7 +27,35 @@ type SummaryDocument = {
   normalizedUnit: string;
   issuingUnit: string;
   signedDocument: string;
+  signerName?: string | null;
 };
+
+export type SignerBoardRow = {
+  stt: number;
+  signer: string;
+  totalDocuments: number;
+  signed: number;
+  signRate: number;
+};
+
+function signerKey(value: string | null | undefined): string {
+  return (value || '').trim();
+}
+
+function buildSignerBoard(documents: SummaryDocument[]): SignerBoardRow[] {
+  const map = new Map<string, { signer: string; totalDocuments: number; signed: number }>();
+  for (const document of documents) {
+    const name = signerKey(document.signerName);
+    if (!name) continue;
+    if (!map.has(name)) map.set(name, { signer: name, totalDocuments: 0, signed: 0 });
+    const row = map.get(name)!;
+    row.totalDocuments += 1;
+    if (isSignedDocument(document.signedDocument)) row.signed += 1;
+  }
+  return [...map.values()]
+    .sort((a, b) => b.totalDocuments - a.totalDocuments || a.signer.localeCompare(b.signer, 'vi'))
+    .map((row, index) => ({ stt: index + 1, ...row, signRate: percentage(row.signed, row.totalDocuments) }));
+}
 
 export function isReportableDocument(document: Pick<SummaryDocument, 'issuingUnit' | 'normalizedUnit'>): boolean {
   return Boolean(document.normalizedUnit) || !isNhnoSpecialCase({ referenceNumber: '', issuingUnit: document.issuingUnit, normalizedUnit: document.normalizedUnit });
@@ -117,7 +145,8 @@ export function summaryFromDocuments(documents: SummaryDocument[]) {
     totals,
     byGroup: Object.values(byGroup),
     byUnit: [...byUnit.values()].sort((a, b) => b.total - a.total),
-    boardRows
+    boardRows,
+    signerBoardRows: buildSignerBoard(reportableDocuments)
   };
 }
 

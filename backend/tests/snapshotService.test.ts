@@ -9,6 +9,7 @@ describe('snapshotService', () => {
       summary: 'Original summary',
       referenceNumber: '01/CV-ALCO',
       signedDocument: 'Đã ký số',
+      signerName: 'Nguyễn Văn A',
       issueDate: new Date('2026-08-13T00:00:00.000Z'),
       issuingUnit: 'NHNo',
       normalizedUnit: 'ALCO',
@@ -25,5 +26,6 @@ describe('snapshotService', () => {
     expect(copied.summary).toBe('Original summary');
     expect(copied.normalizedUnit).toBe('ALCO');
     expect(copied.documentGroup).toBe(DocumentGroup.LETTER_AUTHORIZATION);
+    expect(copied.signerName).toBe('Nguyễn Văn A');
   });
 });
