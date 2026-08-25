@@ -1,11 +1,7 @@
-node_modules
-backend/node_modules
-frontend/node_modules
-backend/dist
-frontend/dist
 .git
 .env
+backup
 storage/uploads/*
 storage/exports/*
 storage/snapshots/*
-backup
+frontend/node_modules
