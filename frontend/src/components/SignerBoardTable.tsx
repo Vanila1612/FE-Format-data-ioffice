@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import type { SignerBoardRow } from '../types/api';
+import { api, unwrap } from '../services/api';
+import type { Signer, SignerBoardRow } from '../types/api';
 import { numberText } from '../utils/format';
 import { SignerCell } from './SignerCell';
 import { SortHeader, type SortDir } from './SortHeader';
@@ -18,12 +20,32 @@ const DEFAULT_SORT: SortState = { key: 'stt', dir: 'asc' };
 export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [search, setSearch] = useState('');
+  const [position, setPosition] = useState('');
+
+  const signers = useQuery({
+    queryKey: ['signers'],
+    queryFn: async () => unwrap<Signer[]>(await api.get('/signers')),
+    staleTime: 5 * 60_000
+  });
+
+  const positions = useMemo(
+    () => [...new Set((signers.data || []).map((signer) => signer.position))].sort((a, b) => a.localeCompare(b, 'vi')),
+    [signers.data]
+  );
+
+  const allowedSigners = useMemo(() => {
+    if (!position) return null;
+    return new Set((signers.data || []).filter((signer) => signer.position === position).map((signer) => signer.username.toLowerCase()));
+  }, [signers.data, position]);
 
   const filteredRows = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) => row.signer.toLowerCase().includes(needle));
-  }, [rows, search]);
+    return rows.filter((row) => {
+      if (needle && !row.signer.toLowerCase().includes(needle)) return false;
+      if (allowedSigners && !allowedSigners.has(row.signer.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [rows, search, allowedSigners]);
 
   const sortedRows = useMemo(() => {
     const direction = sort.dir === 'asc' ? 1 : -1;
@@ -72,12 +94,16 @@ export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
           onChange={(event) => setSearch(event.target.value)}
           aria-label="Tìm người ký chính"
         />
-        {search && <button type="button" className="secondary" onClick={() => setSearch('')}>Xóa</button>}
+        <select value={position} onChange={(event) => setPosition(event.target.value)} aria-label="Lọc theo chức danh người ký">
+          <option value="">Tất cả người ký</option>
+          {positions.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        {(search || position) && <button type="button" className="secondary" onClick={() => { setSearch(''); setPosition(''); }}>Xóa</button>}
         <span className="muted">{numberText(visible.length)}/{numberText(rows.length)} người ký</span>
       </div>
 
       {visible.length === 0 ? (
-        <div className="state empty-state"><strong>Không tìm thấy người ký phù h�p với “{search}”</strong></div>
+        <div className="state empty-state"><strong>Không tìm thấy người ký phù hợp với bộ lọc đang chọn</strong></div>
       ) : (
         <div className="table-scroll result-board">
           <table>

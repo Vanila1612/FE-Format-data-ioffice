@@ -1,4 +1,4 @@
-import { Bell, ClipboardList, DatabaseBackup, FileSearch, FileSpreadsheet, Gauge, History, LogOut, Map, ShieldCheck, Sparkles, UploadCloud, Users } from 'lucide-react';
+import { Bell, ClipboardList, DatabaseBackup, FileSearch, FileSpreadsheet, Gauge, History, LogOut, Map, PenLine, ShieldCheck, Sparkles, UploadCloud, Users } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
 
@@ -10,6 +10,7 @@ const nav = [
   { to: '/assistant', label: 'Trợ lý AI', icon: Sparkles },
   { to: '/rules', label: 'Quy tắc phân loại', icon: ShieldCheck, admin: true },
   { to: '/unit-mappings', label: 'Chuẩn hóa đơn vị', icon: Map, admin: true },
+  { to: '/signers', label: 'Người ký chính', icon: PenLine, admin: true },
   { to: '/users', label: 'Người dùng & quyền', icon: Users, admin: true },
   { to: '/imports', label: 'Lịch sử nhập', icon: History },
   { to: '/snapshots', label: 'Kết quả đã lưu', icon: ClipboardList }
@@ -23,6 +24,7 @@ const titles: Record<string, string> = {
   '/assistant': 'Trợ lý AI',
   '/rules': 'Quy tắc phân loại',
   '/unit-mappings': 'Chuẩn hóa đơn vị',
+  '/signers': 'Danh sách người ký chính',
   '/users': 'Người dùng & phân quyền',
   '/imports': 'Lịch sử nhập',
   '/snapshots': 'Kết quả đã lưu'

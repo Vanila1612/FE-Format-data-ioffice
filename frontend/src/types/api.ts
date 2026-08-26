@@ -88,6 +88,13 @@ export type UnitMapping = {
   enabled: boolean;
 };
 
+export type Signer = {
+  id: string;
+  username: string;
+  fullName: string;
+  position: string;
+};
+
 export type Snapshot = {
   id: string;
   name: string;

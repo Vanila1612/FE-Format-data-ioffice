@@ -10,6 +10,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { RulesPage } from '../pages/RulesPage';
 import { UsersPage } from '../pages/UsersPage';
+import { SignersPage } from '../pages/SignersPage';
 import { SnapshotsPage } from '../pages/SnapshotsPage';
 import { UnitMappingsPage } from '../pages/UnitMappingsPage';
 import { LoadingState } from '../components/State';
@@ -32,6 +33,7 @@ export function AppRouter() {
       <Route path="/assistant" element={<AssistantPage />} />
       <Route path="/rules" element={<RulesPage />} />
       <Route path="/unit-mappings" element={<UnitMappingsPage />} />
+      <Route path="/signers" element={<SignersPage />} />
       <Route path="/imports" element={<ImportsPage />} />
       <Route path="/snapshots" element={<SnapshotsPage />} />
       <Route path="/users" element={<UsersPage />} />

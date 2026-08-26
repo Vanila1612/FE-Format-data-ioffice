@@ -11,6 +11,7 @@ import { healthRoutes } from './routes/healthRoutes.js';
 import { importRoutes } from './routes/importRoutes.js';
 import { reportRoutes } from './routes/reportRoutes.js';
 import { ruleRoutes } from './routes/ruleRoutes.js';
+import { signerRoutes } from './routes/signerRoutes.js';
 import { snapshotRoutes } from './routes/snapshotRoutes.js';
 import { unitMappingRoutes } from './routes/unitMappingRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/api/documents', documentRoutes);
   app.use('/api/rules', ruleRoutes);
   app.use('/api/unit-mappings', unitMappingRoutes);
+  app.use('/api/signers', signerRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/snapshots', snapshotRoutes);
   app.use('/api/reports', reportRoutes);

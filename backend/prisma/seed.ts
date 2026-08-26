@@ -54,6 +54,27 @@ async function main() {
       create: mapping
     });
   }
+
+  const signers = [
+    { username: 'phamtoanvuong', fullName: 'Phạm Toàn Vượng', position: 'Tổng Giám đốc' },
+    { username: 'binhpt.tsc', fullName: 'Phùng Thị Bình', position: 'Phó Tổng Giám đốc' },
+    { username: 'thanhpc', fullName: 'Phạm Chí Thành', position: 'Phó Tổng Giám đốc' },
+    { username: 'hoangminhngoc', fullName: 'Hoàng Minh Ngọc', position: 'Phó Tổng Giám đốc' },
+    { username: 'xuatlevan', fullName: 'Lê Văn Xuất', position: 'Phó Tổng Giám đốc' },
+    { username: 'nguyenquanghung', fullName: 'Nguyễn Quang Hùng', position: 'Phó Tổng Giám đốc' },
+    { username: 'luudn', fullName: 'Đoàn Ngọc Lưu', position: 'Phó Tổng Giám đốc' },
+    { username: 'doducthanh', fullName: 'Đỗ Đức Thành', position: 'Phó Tổng Giám đốc' },
+    { username: 'phuclh', fullName: 'Lê Hồng Phúc', position: 'Phó Tổng Giám đốc' },
+    { username: 'linhvuonghong', fullName: 'Vương Hồng Lĩnh', position: 'Phó Tổng Giám đốc' }
+  ];
+
+  for (const signer of signers) {
+    await prisma.signer.upsert({
+      where: { username: signer.username },
+      update: signer,
+      create: signer
+    });
+  }
 }
 
 main()

@@ -174,15 +174,24 @@ const RESULT_IS_TEXT: Record<ResultSortKey, boolean> = {
   totalSigned: false, totalDocuments: false, totalRate: false
 };
 
+// ponytail: nhận diện chi nhánh bằng tên đơn vị ("chi nhánh"/"CN"); nâng cấp sang cờ isBranch từ backend khi cần chính xác tuyệt đối.
+export function isBranchUnit(unit: string) {
+  return /(^|[^a-z])(chi nhanh|cn)([^a-z]|$)/.test(unit.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
+}
+
 export function ResultBoardTable({ rows }: { rows: ResultBoardRow[] }) {
   const [sort, setSort] = useState<ResultSortState>({ key: 'stt', dir: 'asc' });
   const [search, setSearch] = useState('');
+  const [scope, setScope] = useState<'ALL' | 'BRANCH' | 'NON_BRANCH'>('ALL');
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) => row.unit.toLowerCase().includes(needle));
-  }, [rows, search]);
+    return rows.filter((row) => {
+      if (needle && !row.unit.toLowerCase().includes(needle)) return false;
+      if (scope === 'ALL') return true;
+      return isBranchUnit(row.unit) === (scope === 'BRANCH');
+    });
+  }, [rows, search, scope]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     const field = RESULT_FIELDS[sort.key];
@@ -214,11 +223,16 @@ export function ResultBoardTable({ rows }: { rows: ResultBoardRow[] }) {
         aria-label="Tìm đơn vị"
       />
       {search && <button type="button" className="secondary" onClick={() => setSearch('')}>Xóa</button>}
+      <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Lọc chi nhánh">
+        <option value="ALL">Tất cả đơn vị</option>
+        <option value="BRANCH">Chỉ chi nhánh</option>
+        <option value="NON_BRANCH">Không gồm chi nhánh</option>
+      </select>
       <span className="muted">{numberText(sorted.length)}/{numberText(rows.length)} đơn vị</span>
     </div>
 
     {sorted.length === 0 ? (
-      <div className="state empty-state"><strong>Không tìm thấy đơn vị phù hợp với “{search}”</strong></div>
+      <div className="state empty-state"><strong>{search ? `Không tìm thấy đơn vị phù hợp với “${search}”` : 'Không có đơn vị nào khớp bộ lọc'}</strong></div>
     ) : (
       <div className="table-scroll result-board">
     <table>
