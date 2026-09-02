@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, unwrap } from '../services/api';
 import { groupLabels, numberText } from '../utils/format';
 import { parseLocalExcel, type LocalImportResult, type ResultBoardRow } from '../utils/localImport';
+import { filterResultBoardRows, totalsFromBoardRows, type UnitScope } from '../utils/unitScope';
 import { SignerBoardTable } from '../components/SignerBoardTable';
 import { SortHeader, type SortDir } from '../components/SortHeader';
 
@@ -110,12 +111,17 @@ function LocalResult({ result, rows, query, setQuery, group, setGroup }: {
   group: string;
   setGroup: (value: string) => void;
 }) {
+  const [boardSearch, setBoardSearch] = useState('');
+  const [unitScope, setUnitScope] = useState<UnitScope>('ALL');
+  const visibleRows = useMemo(() => filterResultBoardRows(rows, boardSearch, unitScope), [rows, boardSearch, unitScope]);
+  const totals = useMemo(() => totalsFromBoardRows(visibleRows), [visibleRows]);
+
   return <>
     <div className="kpi-grid">
-      <div className="kpi"><span>Tổng văn bản</span><strong>{numberText(result.totals.total)}</strong></div>
-      <div className="kpi"><span>Đã ký số</span><strong>{numberText(result.totals.signed)}</strong></div>
-      <div className="kpi"><span>Chưa ký số</span><strong>{numberText(result.totals.unsigned)}</strong></div>
-      <div className="kpi"><span>Tỷ lệ ký</span><strong>{result.totals.signRate}%</strong></div>
+      <div className="kpi"><span>Tổng văn bản</span><strong>{numberText(totals.total)}</strong></div>
+      <div className="kpi"><span>Đã ký số</span><strong>{numberText(totals.signed)}</strong></div>
+      <div className="kpi"><span>Chưa ký số</span><strong>{numberText(totals.unsigned)}</strong></div>
+      <div className="kpi"><span>Tỷ lệ ký</span><strong>{totals.signRate}%</strong></div>
     </div>
 
     <div className="toolbar">
@@ -134,7 +140,7 @@ function LocalResult({ result, rows, query, setQuery, group, setGroup }: {
           <p>Khoảng thời gian: {result.period.from || '-'} - {result.period.to || '-'}</p>
         </div>
       </div>
-      <ResultBoardTable rows={rows} />
+      <ResultBoardTable rows={rows} search={boardSearch} onSearchChange={setBoardSearch} scope={unitScope} onScopeChange={setUnitScope} />
     </div>
 
     <div className="panel">
@@ -174,24 +180,22 @@ const RESULT_IS_TEXT: Record<ResultSortKey, boolean> = {
   totalSigned: false, totalDocuments: false, totalRate: false
 };
 
-// ponytail: nhận diện chi nhánh bằng tên đơn vị ("chi nhánh"/"CN"); nâng cấp sang cờ isBranch từ backend khi cần chính xác tuyệt đối.
-export function isBranchUnit(unit: string) {
-  return /(^|[^a-z])(chi nhanh|cn)([^a-z]|$)/.test(unit.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
-}
-
-export function ResultBoardTable({ rows }: { rows: ResultBoardRow[] }) {
+export function ResultBoardTable({ rows, search: controlledSearch, onSearchChange, scope: controlledScope, onScopeChange }: {
+  rows: ResultBoardRow[];
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  scope?: UnitScope;
+  onScopeChange?: (value: UnitScope) => void;
+}) {
   const [sort, setSort] = useState<ResultSortState>({ key: 'stt', dir: 'asc' });
-  const [search, setSearch] = useState('');
-  const [scope, setScope] = useState<'ALL' | 'BRANCH' | 'NON_BRANCH'>('ALL');
+  const [internalSearch, setInternalSearch] = useState('');
+  const [internalScope, setInternalScope] = useState<UnitScope>('ALL');
+  const search = controlledSearch ?? internalSearch;
+  const scope = controlledScope ?? internalScope;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const setScope = onScopeChange ?? setInternalScope;
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (needle && !row.unit.toLowerCase().includes(needle)) return false;
-      if (scope === 'ALL') return true;
-      return isBranchUnit(row.unit) === (scope === 'BRANCH');
-    });
-  }, [rows, search, scope]);
+  const filtered = useMemo(() => filterResultBoardRows(rows, search, scope), [rows, search, scope]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     const field = RESULT_FIELDS[sort.key];
@@ -223,10 +227,10 @@ export function ResultBoardTable({ rows }: { rows: ResultBoardRow[] }) {
         aria-label="Tìm đơn vị"
       />
       {search && <button type="button" className="secondary" onClick={() => setSearch('')}>Xóa</button>}
-      <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Lọc chi nhánh">
+      <select value={scope} onChange={(event) => setScope(event.target.value as UnitScope)} aria-label="Lọc chi nhánh">
         <option value="ALL">Tất cả đơn vị</option>
-        <option value="BRANCH">Chỉ chi nhánh</option>
-        <option value="NON_BRANCH">Không gồm chi nhánh</option>
+        <option value="CENTRAL">Trụ sở chính</option>
+        <option value="BRANCH">Chi nhánh</option>
       </select>
       <span className="muted">{numberText(sorted.length)}/{numberText(rows.length)} đơn vị</span>
     </div>

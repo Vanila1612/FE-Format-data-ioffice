@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { api, downloadFile, unwrap } from '../services/api';
 import type { ImportRecord, Summary } from '../types/api';
 import { numberText } from '../utils/format';
+import { exportResultBoardExcel } from '../utils/resultBoardExport';
+import { filterResultBoardRows, totalsFromBoardRows, type UnitScope } from '../utils/unitScope';
 import { EmptyState, ErrorState, LoadingState } from '../components/State';
 import { ResultBoardTable } from './ImportPage';
 import { SignerBoardTable } from '../components/SignerBoardTable';
@@ -18,6 +20,8 @@ export function ReportsPage() {
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo, setAppliedTo] = useState('');
   const [snapshotName, setSnapshotName] = useState('');
+  const [boardSearch, setBoardSearch] = useState('');
+  const [unitScope, setUnitScope] = useState<UnitScope>('ALL');
 
   const filters = { importId: importId || undefined, from: appliedFrom || undefined, to: appliedTo || undefined };
   const imports = useQuery({ queryKey: ['imports-for-report'], queryFn: async () => unwrap<ImportRecord[]>(await api.get('/imports')) });
@@ -45,9 +49,19 @@ export function ReportsPage() {
     setAppliedTo('');
   }
 
+  function exportVisibleBoard() {
+    if (!visibleBoardRows.length) {
+      toast.error('Không có dữ liệu để xuất Excel');
+      return;
+    }
+    exportResultBoardExcel(visibleBoardRows, visibleTotals, `ioffice-thong-ke-don-vi-${unitScope.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   if (imports.isLoading || report.isLoading) return <LoadingState />;
   if (imports.isError || report.isError) return <ErrorState message={(imports.error || report.error)!.message} retry={() => { void imports.refetch(); void report.refetch(); }} />;
   const data = report.data!;
+  const visibleBoardRows = filterResultBoardRows(data.boardRows, boardSearch, unitScope);
+  const visibleTotals = totalsFromBoardRows(visibleBoardRows);
   const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)).map(([key, value]) => [key, String(value)])).toString();
   const hasPendingDateChange = fromInput !== appliedFrom || toInput !== appliedTo;
 
@@ -66,7 +80,7 @@ export function ReportsPage() {
         <button className="secondary" onClick={() => void downloadFile(`/reports/export?${query}`).catch((error) => toast.error(error.message))}>Xuất Excel</button>
       </div>
     </div>
-    <div className="kpi-grid"><Kpi label="Tổng văn bản" value={data.totals.total} /><Kpi label="Đã ký số" value={data.totals.signed} /><Kpi label="Chưa ký số" value={data.totals.unsigned} /><Kpi label="Tỷ lệ ký" value={`${data.totals.signRate}%`} /></div>
+    <div className="kpi-grid"><Kpi label="Tổng văn bản" value={visibleTotals.total} /><Kpi label="Đã ký số" value={visibleTotals.signed} /><Kpi label="Chưa ký số" value={visibleTotals.unsigned} /><Kpi label="Tỷ lệ ký" value={`${visibleTotals.signRate}%`} /></div>
     <div className="panel">
       <div className="panel-head">
         <div>
@@ -75,10 +89,11 @@ export function ReportsPage() {
         </div>
         <div className="snapshot-create">
           <input placeholder="Tên kết quả lưu (không bắt buộc)" value={snapshotName} onChange={(event) => setSnapshotName(event.target.value)} />
+          <button className="secondary" disabled={!visibleBoardRows.length} onClick={exportVisibleBoard}>Xuất bảng Excel</button>
           <button disabled={createSnapshot.isPending || !data.totals.total} onClick={() => createSnapshot.mutate()}>{createSnapshot.isPending ? 'Đang lưu…' : 'Lưu kết quả thống kê'}</button>
         </div>
       </div>
-      {data.boardRows.length === 0 ? <EmptyState /> : <ResultBoardTable rows={data.boardRows} />}
+      {data.boardRows.length === 0 ? <EmptyState /> : <ResultBoardTable rows={data.boardRows} search={boardSearch} onSearchChange={setBoardSearch} scope={unitScope} onScopeChange={setUnitScope} />}
     </div>
     <div className="panel">
       <div className="panel-head"><div><h2>THỐNG KÊ VĂN BẢN ĐI THEO NGƯỜI KÝ CHÍNH</h2><p>{data.signerBoardRows?.length || 0} người ký chính trong phạm vi đã chọn.</p></div></div>

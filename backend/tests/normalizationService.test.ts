@@ -52,16 +52,25 @@ describe('normalizationService', () => {
 
   it('groups known unit-name variants into the requested canonical units', () => {
     const emptyMappings: never[] = [];
-    expect(normalizeUnit('BAN KIỂM SOÁT', emptyMappings)).toBe('Ban Kiểm soát');
-    expect(normalizeUnit('Đảng Ủy Agribank', emptyMappings)).toBe('Đảng ủy Agribank');
-    expect(normalizeUnit('Trụ sở chính Agribank', emptyMappings)).toBe('Trụ sở chính');
-    expect(normalizeUnit('Văn phòng Trụ sở chính', emptyMappings)).toBe('Trụ sở chính');
+    expect(normalizeUnit('BAN KIỂM SOÁT', emptyMappings)).toBe('Ban Kiểm soát Agribank');
+    expect(normalizeUnit('Đảng Ủy Agribank', emptyMappings)).toBe('Tổ chức Đảng Ủy');
+    expect(normalizeUnit('Trụ sở chính Agribank', emptyMappings)).toBe('Văn phòng TSC');
+    expect(normalizeUnit('Văn phòng Trụ sở chính', emptyMappings)).toBe('Văn phòng TSC');
     expect(normalizeUnit('Công đoàn cơ sở Trung tâm Thẻ', emptyMappings)).toBe('Trung tâm Thẻ');
     expect(normalizeUnit('Chi bộ Trung tâm PCRT', emptyMappings)).toBe('Trung tâm Phòng, chống rửa tiền');
-    expect(normalizeUnit('TTKH', emptyMappings)).toBe('Trung tâm Dịch vụ thanh toán và kiều hối');
-    expect(normalizeUnit('phòng Tổng hợp', emptyMappings)).toBe('Trụ sở chính');
-    expect(normalizeUnit('KIỂM TOÁN NỘI BỘ - BAN KIỂM SOÁT', emptyMappings)).toBe('Ban Kiểm soát');
+    expect(normalizeUnit('TTKH', emptyMappings)).toBe('TTDV TT&KH');
+    expect(normalizeUnit('phòng Tổng hợp', emptyMappings)).toBe('Văn phòng TSC');
+    expect(normalizeUnit('KIỂM TOÁN NỘI BỘ - BAN KIỂM SOÁT', emptyMappings)).toBe('Ban Kiểm soát Agribank');
     expect(normalizeUnit('TTT.12', emptyMappings)).toBe('Trung tâm Thẻ');
+    expect(normalizeUnit('Ban thư ký HDTV', emptyMappings)).toBe('Ban Thư ký Hội đồng thành viên');
+    expect(normalizeUnit('TTCNTT', emptyMappings)).toBe('Trung tâm Công nghệ thông tin');
+    expect(normalizeUnit('KHDN', emptyMappings)).toBe('Ban Khách hàng Doanh nghiệp');
+    expect(normalizeUnit('QLRRTD', emptyMappings)).toBe('Trung tâm Quản lý rủi ro tín dụng');
+    expect(normalizeUnit('VPĐD miền Trung', emptyMappings)).toBe('Văn phòng đại diện Khu vực miền Trung');
+    expect(normalizeUnit('Ban KHCL', emptyMappings)).toBe('Ban Kế hoạch chiến lược');
+    expect(normalizeUnit('Ban Tổ chức Đảng ủy', emptyMappings)).toBe('Tổ chức Đảng Ủy');
+    expect(normalizeUnit('Ban Quản lý TS Nợ - TS Có', emptyMappings)).toBe('Ban Quản lý Tài sản Nợ - Tài sản Có');
+    expect(normalizeUnit('TTPD', emptyMappings)).toBe('Trung tâm Phê duyệt tín dụng Tp Hồ Chí Minh');
   });
 
   it('uses reference number, issue date, and issuing unit as the duplicate identity', () => {
@@ -72,7 +81,7 @@ describe('normalizationService', () => {
 
   it('maps approved NHNo reference suffixes and excludes unknown suffixes', () => {
     const emptyMappings: never[] = [];
-    expect(normalizeNhnoReferenceUnit('12969/NHNo-ALCO', emptyMappings)).toBe('TRUNG TÂM QUẢN LÝ NỢ CVĐ');
+    expect(normalizeNhnoReferenceUnit('12969/NHNo-ALCO', emptyMappings)).toBe('Trung tâm quản lý nợ có vấn đề');
     expect(normalizeNhnoReferenceUnit('1/NHNo-TTT.12', emptyMappings)).toBe('Trung tâm Thẻ');
     expect(normalizeNhnoReferenceUnit('1073', emptyMappings)).toBeNull();
   });

@@ -149,7 +149,7 @@ export async function reprocessImport(importId: string) {
       }))
     });
     await tx.import.update({ where: { id: importId }, data: { totalRows: documents.length, successRows: documents.length, failedRows: 0, status: 'COMPLETED', errorMessage: null, completedAt: new Date() } });
-  });
+  }, { timeout: 120_000 });
   return prisma.import.findUniqueOrThrow({ where: { id: importId }, include: { _count: { select: { documents: true } } } });
 }
 
