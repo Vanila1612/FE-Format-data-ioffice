@@ -4,9 +4,9 @@ import type { Prisma } from '@prisma/client';
 import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
 import { AppError } from '../utils/appError.js';
-import { classifyDocument } from './classificationService.js';
+import { getImportQueue } from '../jobs/importQueue.js';
 import { parseWorkbook } from './excelService.js';
-import { documentDedupeKey, normalizeDocument, normalizeNhnoReferenceUnit } from './normalizationService.js';
+import { documentDedupeKey, normalizeDocument } from './normalizationService.js';
 
 const allowedExtensions = new Set(['.xlsx', '.xls']);
 const allowedMime = new Set([
@@ -40,11 +40,13 @@ export async function previewImport(file: Express.Multer.File) {
   return parseWorkbook(file.buffer);
 }
 
-export async function createImport(file: Express.Multer.File, uploadedById: string) {
+/**
+ * Đẩy file + tạo Import record (PROCESSING + processedRows=0) rồi enqueue vào BullMQ.
+ * Không xử lý Excel trong request — worker sẽ xử lý nền và cập nhật tiến độ.
+ */
+export async function enqueueImport(file: Express.Multer.File, uploadedById: string) {
   validateUpload(file);
   const parsed = parseWorkbook(file.buffer);
-  const rules = await prisma.classificationRule.findMany({ orderBy: [{ priority: 'asc' }, { keyword: 'asc' }] });
-  const mappings = await prisma.unitMapping.findMany();
 
   const importRecord = await prisma.import.create({
     data: {
@@ -54,103 +56,80 @@ export async function createImport(file: Express.Multer.File, uploadedById: stri
       fileSize: file.size,
       status: 'PROCESSING',
       totalRows: parsed.rows.length,
+      processedRows: 0,
       uploadedById
     }
   });
 
-  try {
-    const savedFile = await saveOriginalFile(file, importRecord.id);
-    const documents = await normalizeRows(parsed.rows, rules, mappings);
-    await persistDocuments(importRecord.id, documents);
-    const completed = await prisma.import.update({
-      where: { id: importRecord.id },
-      data: {
-        storedFileName: savedFile.storedFileName,
-        filePath: savedFile.filePath,
-        status: 'COMPLETED',
-        successRows: documents.length,
-        failedRows: 0,
-        completedAt: new Date()
-      }
-    });
-
-    return { import: completed, preview: parsed.preview, documentsImported: documents.length, replacedRows: 0 };
-  } catch (error) {
-    await prisma.import.update({
-      where: { id: importRecord.id },
-      data: {
-        status: 'FAILED',
-        failedRows: parsed.rows.length,
-        errorMessage: error instanceof Error ? error.message : 'Unknown import error',
-        completedAt: new Date()
-      }
-    });
-    throw error;
-  }
-}
-
-type ClassifiedDocument = ReturnType<typeof normalizeDocument> & { normalizedUnit: string; documentGroup: ReturnType<typeof classifyDocument>['documentGroup'] };
-
-async function normalizeRows(rows: Awaited<ReturnType<typeof parseWorkbook>>['rows'], rules: Awaited<ReturnType<typeof prisma.classificationRule.findMany>>, mappings: Awaited<ReturnType<typeof prisma.unitMapping.findMany>>) {
-  return rows.map((row) => {
-    const normalized = normalizeDocument(row, mappings);
-    const classified = classifyDocument(normalized, rules);
-    const normalizedUnit = classified.useReferenceSuffix
-      ? normalizeNhnoReferenceUnit(normalized.referenceNumber, mappings) || ''
-      : classified.normalizedUnit;
-    return { ...normalized, normalizedUnit, documentGroup: classified.documentGroup };
+  const savedFile = await saveOriginalFile(file, importRecord.id);
+  await prisma.import.update({
+    where: { id: importRecord.id },
+    data: { storedFileName: savedFile.storedFileName, filePath: savedFile.filePath }
   });
+
+  await getImportQueue().add('process', { importId: importRecord.id, uploadedById });
+
+  return {
+    import: importRecord,
+    preview: parsed.preview,
+    documentsImported: 0,
+    jobEnqueued: true
+  };
 }
 
-async function persistDocuments(importId: string, documents: ClassifiedDocument[]) {
-  await prisma.document.createMany({
-    data: documents.map((document) => ({
-      importId,
-      summary: document.summary,
-      referenceNumber: document.referenceNumber,
-      signedDocument: document.signedDocument,
-      signerName: document.signerName,
-      issueDate: document.issueDate,
-      issuingUnit: document.issuingUnit,
-      normalizedUnit: document.normalizedUnit,
-      documentGroup: document.documentGroup,
-      rawData: document.rawData as Prisma.InputJsonValue,
-      dedupeKey: documentDedupeKey(document.referenceNumber, document.issueDate, document.issuingUnit)
-    }))
+export async function getImportStatus(importId: string) {
+  const imported = await prisma.import.findUnique({
+    where: { id: importId },
+    select: {
+      id: true,
+      status: true,
+      totalRows: true,
+      processedRows: true,
+      successRows: true,
+      failedRows: true,
+      errorMessage: true,
+      completedAt: true,
+      createdAt: true
+    }
+  });
+  if (!imported) throw new AppError(404, 'IMPORT_NOT_FOUND', 'Không tìm thấy lần nhập dữ liệu');
+  return imported;
+}
+
+export async function getActiveImports(userId: string) {
+  return prisma.import.findMany({
+    where: {
+      OR: [{ status: 'PROCESSING' }, { status: 'UPLOADED' }]
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 10
   });
 }
 
 export async function reprocessImport(importId: string) {
   const imported = await prisma.import.findUnique({ where: { id: importId } });
   if (!imported) throw new AppError(404, 'IMPORT_NOT_FOUND', 'Import not found');
-  let buffer: Buffer;
-  try { buffer = await fs.readFile(imported.filePath); } catch { throw new AppError(404, 'SOURCE_FILE_NOT_FOUND', 'Original import file is no longer available'); }
-  const parsed = parseWorkbook(buffer);
-  const [rules, mappings] = await Promise.all([
-    prisma.classificationRule.findMany({ orderBy: [{ priority: 'asc' }, { keyword: 'asc' }] }),
-    prisma.unitMapping.findMany()
-  ]);
-  const documents = await normalizeRows(parsed.rows, rules, mappings);
-  await prisma.$transaction(async (tx) => {
-    await tx.document.deleteMany({ where: { importId } });
-    await tx.document.createMany({
-      data: documents.map((document) => ({
-        importId,
-        summary: document.summary,
-        referenceNumber: document.referenceNumber,
-        signedDocument: document.signedDocument,
-        signerName: document.signerName,
-        issueDate: document.issueDate,
-        issuingUnit: document.issuingUnit,
-        normalizedUnit: document.normalizedUnit,
-        documentGroup: document.documentGroup,
-        rawData: document.rawData as Prisma.InputJsonValue,
-        dedupeKey: documentDedupeKey(document.referenceNumber, document.issueDate, document.issuingUnit)
-      }))
-    });
-    await tx.import.update({ where: { id: importId }, data: { totalRows: documents.length, successRows: documents.length, failedRows: 0, status: 'COMPLETED', errorMessage: null, completedAt: new Date() } });
-  }, { timeout: 120_000 });
-  return prisma.import.findUniqueOrThrow({ where: { id: importId }, include: { _count: { select: { documents: true } } } });
+  if (!imported.filePath || imported.filePath === 'pending') {
+    throw new AppError(404, 'SOURCE_FILE_NOT_FOUND', 'Original import file is no longer available');
+  }
+
+  // Xóa documents cũ trước khi đẩy lại job (worker giả định insert từ đầu)
+  await prisma.document.deleteMany({ where: { importId } });
+  await prisma.import.update({
+    where: { id: importId },
+    data: {
+      status: 'PROCESSING',
+      totalRows: 0,
+      processedRows: 0,
+      successRows: 0,
+      failedRows: 0,
+      errorMessage: null,
+      completedAt: null
+    }
+  });
+
+  await getImportQueue().add('process', { importId, uploadedById: imported.uploadedById });
+  return prisma.import.findUniqueOrThrow({ where: { id: importId } });
 }
 
 export async function deleteImport(importId: string) {

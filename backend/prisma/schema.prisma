@@ -52,6 +52,7 @@ model Import {
   uploadedBy       User         @relation("ImportUploader", fields: [uploadedById], references: [id])
   createdAt        DateTime     @default(now())
   completedAt      DateTime?
+  processedRows    Int          @default(0)
   errorMessage     String?
   documents        Document[]
   snapshots        Snapshot[]

@@ -17,7 +17,10 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   OPENAI_BASE_URL: z.string().optional(),
-  AI_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(6)
+  AI_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(6),
+  REDIS_URL: z.string().optional(),
+  WORKER_ONLY: z.coerce.boolean().default(false),
+  IMPORT_CHUNK_SIZE: z.coerce.number().int().min(50).max(10_000).default(500)
 });
 
 export const env = envSchema.parse(process.env);

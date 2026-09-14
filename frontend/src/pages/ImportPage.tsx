@@ -1,4 +1,4 @@
-import { ChangeEvent, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, FileUp, RotateCcw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,16 @@ export function ImportPage() {
   const [result, setResult] = useState<LocalImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeJob, setActiveJob] = useState<{
+    importId: string;
+    totalRows: number;
+    processedRows: number;
+    status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'UPLOADED';
+    errorMessage?: string;
+    progress: number;
+    startedAt: number;
+  } | null>(null);
+  const pollingRef = useRef<number | null>(null);
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('ALL');
 
@@ -59,6 +69,66 @@ export function ImportPage() {
     setResult(null);
     setQuery('');
     setGroup('ALL');
+    if (pollingRef.current) window.clearInterval(pollingRef.current);
+    pollingRef.current = null;
+    setActiveJob(null);
+    setSaving(false);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) window.clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  async function pollStatus(importId: string, startedAt: number) {
+    const tick = async () => {
+      try {
+        const status = await unwrap<{
+          id: string;
+          status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'UPLOADED';
+          totalRows: number;
+          processedRows: number;
+          progress: number;
+          errorMessage: string | null;
+        }>(await api.get(`/imports/${importId}/status`));
+        setActiveJob((prev) => prev ? {
+          ...prev,
+          status: status.status,
+          totalRows: status.totalRows,
+          processedRows: status.processedRows,
+          progress: status.progress,
+          errorMessage: status.errorMessage ?? undefined
+        } : prev);
+
+        if (status.status === 'COMPLETED') {
+          if (pollingRef.current) window.clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          toast.success(`Đã lưu ${status.totalRows} văn bản vào hệ thống`);
+          navigate(`/documents?importId=${importId}`);
+          return;
+        }
+        if (status.status === 'FAILED') {
+          if (pollingRef.current) window.clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          return;
+        }
+        // Poll tiếp nếu vẫn PROCESSING
+        const elapsed = Date.now() - startedAt;
+        if (elapsed > 1000 * 60 * 30) {
+          // timeout 30 phút — dừng poll để tránh treo
+          if (pollingRef.current) window.clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          toast.error('Quá thời gian chờ (30 phút). Vui lòng thử lại.');
+        }
+      } catch (error) {
+        // Lỗi mạng tạm thời — thử poll lại vòng sau
+        console.warn('poll status error', error);
+      }
+    };
+    // gọi ngay 1 lần + setInterval
+    void tick();
+    pollingRef.current = window.setInterval(tick, 1500);
   }
 
   async function saveToDatabase() {
@@ -67,15 +137,25 @@ export function ImportPage() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const saved = await unwrap<{ import: { id: string }; documentsImported: number; replacedRows: number }>(await api.post('/imports', form));
-      toast.success(`Đã lưu ${saved.documentsImported} dòng văn bản`);
-      navigate(`/documents?importId=${saved.import.id}`);
+      const saved = await unwrap<{ import: { id: string; totalRows: number } }>(await api.post('/imports', form));
+      const startedAt = Date.now();
+      setActiveJob({
+        importId: saved.import.id,
+        totalRows: saved.import.totalRows ?? result.documents.length,
+        processedRows: 0,
+        status: 'PROCESSING',
+        progress: 0,
+        startedAt
+      });
+      await pollStatus(saved.import.id, startedAt);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Không thể lưu dữ liệu vào cơ sở dữ liệu');
-    } finally {
       setSaving(false);
     }
+    // Lưu ý: setSaving(false) sẽ được gọi khi job hoàn tất / lỗi qua setActiveJob
   }
+
+  const elapsedSeconds = activeJob ? Math.floor((Date.now() - activeJob.startedAt) / 1000) : 0;
 
   return <section className="page-stack">
     <label className="dropzone">
@@ -99,7 +179,21 @@ export function ImportPage() {
       <span>{result.missingColumns.join(', ')}</span>
     </div> : null}
 
-    {result && !result.missingColumns.length && <><div className="toolbar"><button disabled={saving} onClick={saveToDatabase}>{saving ? 'Đang lưu dữ liệu…' : 'Lưu vào hệ thống'}</button><span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span></div><LocalResult result={result} rows={rows} query={query} setQuery={setQuery} group={group} setGroup={setGroup} /></>}
+    {result && !result.missingColumns.length && <><div className="toolbar"><button disabled={saving || (activeJob?.status === 'PROCESSING')} onClick={saveToDatabase}>{activeJob?.status === 'PROCESSING' ? `Đang lưu ${activeJob.progress}%` : saving ? 'Đang upload' : 'Lưu vào hệ thống'}</button><span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span></div>
+      {activeJob && (
+        <div className="panel import-progress">
+          <div className="import-progress-head">
+            <strong>Đang xử lý file ở máy chủ</strong>
+            {activeJob.status === 'PROCESSING' && <span>{activeJob.processedRows}/{activeJob.totalRows} dòng • {Math.floor((Date.now() - activeJob.startedAt) / 1000)}s đã chạy</span>}
+            {activeJob.status === 'COMPLETED' && <span>Hoàn tất</span>}
+            {activeJob.status === 'FAILED' && <span className="import-progress-error">Thất bại</span>}
+          </div>
+          <div className="import-progress-bar"><div className="import-progress-fill" style={{ width: `${activeJob.progress}%` }} /></div>
+          {activeJob.status === 'FAILED' && activeJob.errorMessage && <div className="import-progress-error-detail">{activeJob.errorMessage}</div>}
+          {activeJob.status === 'FAILED' && <button className="secondary" onClick={() => { setActiveJob(null); }}>Đã hiểu</button>}
+        </div>
+      )}
+      <LocalResult result={result} rows={rows} query={query} setQuery={setQuery} group={group} setGroup={setGroup} /></>}
   </section>;
 }
 

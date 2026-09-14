@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api, downloadFile, unwrap } from '../services/api';
@@ -36,11 +36,52 @@ export function DocumentsPage() {
     queryKey: ['documents', filters],
     queryFn: async () => unwrap<Paged<DocumentRecord>>(await api.get('/documents', { params: filters }))
   });
+
+  // Nếu đang filter theo 1 import, poll status để biết worker đang xử lý hay xong rồi
+  type ImportStatus = {
+    status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'UPLOADED';
+    processedRows: number;
+    totalRows: number;
+    progress: number;
+  };
+  const importStatus = useQuery({
+    queryKey: ['import-status', importId],
+    enabled: Boolean(importId),
+    refetchInterval: (query) => {
+      const status = (query.state.data as ImportStatus | undefined)?.status;
+      return status && status !== 'PROCESSING' ? false : 1500;
+    },
+    queryFn: async () => unwrap<ImportStatus>(await api.get(`/imports/${importId}/status`))
+  });
+
+  useEffect(() => {
+    if (importId && importStatus.data?.status !== 'PROCESSING') {
+      void documents.refetch();
+    }
+  }, [importId, importStatus.data?.status]);
   const remove = useMutation({ mutationFn: async (id: string) => unwrap(await api.delete(`/documents/${id}`)), onSuccess: async () => { toast.success('Đã xóa văn bản'); await documents.refetch(); }, onError: (error) => toast.error(error.message) });
 
   if (documents.isLoading) return <LoadingState />;
   if (documents.isError) return <ErrorState message={documents.error.message} retry={() => documents.refetch()} />;
   const data = documents.data!;
+
+  // Nếu filter theo import mà worker vẫn đang xử lý → hiện loading thay vì "Không có dữ liệu"
+  if (importId && importStatus.isPending) return <LoadingState />;
+  if (importId && importStatus.data && importStatus.data.status === 'PROCESSING') {
+    const { processedRows, totalRows, progress } = importStatus.data;
+    return (
+      <section className="page-stack">
+        <div className="panel import-progress">
+          <div className="import-progress-head">
+            <strong>Đang xử lý file ở máy chủ</strong>
+            <span>{processedRows.toLocaleString('en-US')}/{totalRows.toLocaleString('en-US')} dòng • {progress}%</span>
+          </div>
+          <div className="import-progress-bar"><div className="import-progress-fill" style={{ width: `${progress}%` }} /></div>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Vui lòng đợi. Danh sách văn bản sẽ hiển thị ngay khi worker hoàn tất.</p>
+        </div>
+      </section>
+    );
+  }
 
   return <section className="page-stack">
     <div className="toolbar">
