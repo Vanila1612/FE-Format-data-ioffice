@@ -4,7 +4,8 @@ import type { Prisma } from '@prisma/client';
 import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
 import { AppError } from '../utils/appError.js';
-import { getImportQueue } from '../jobs/importQueue.js';
+import { getImportQueue, hasRedis } from '../jobs/importQueue.js';
+import { processImportInline } from './importInlineFallback.js';
 import { parseWorkbook } from './excelService.js';
 import { documentDedupeKey, normalizeDocument } from './normalizationService.js';
 
@@ -67,7 +68,24 @@ export async function enqueueImport(file: Express.Multer.File, uploadedById: str
     data: { storedFileName: savedFile.storedFileName, filePath: savedFile.filePath }
   });
 
-  await getImportQueue().add('process', { importId: importRecord.id, uploadedById });
+  try {
+    await getImportQueue().add('process', { importId: importRecord.id, uploadedById });
+  } catch (queueError) {
+    // Redis không khả dụng → fallback xử lý inline đồng bộ (giống code cũ)
+    console.warn('[import] Redis queue failed, falling back to inline processing:', queueError instanceof Error ? queueError.message : queueError);
+    await processImportInline({
+      importId: importRecord.id,
+      filePath: savedFile.filePath,
+      totalRows: parsed.rows.length
+    });
+    return {
+      import: await prisma.import.findUniqueOrThrow({ where: { id: importRecord.id } }),
+      preview: parsed.preview,
+      documentsImported: parsed.rows.length,
+      jobEnqueued: false,
+      inline: true
+    };
+  }
 
   return {
     import: importRecord,
@@ -128,7 +146,16 @@ export async function reprocessImport(importId: string) {
     }
   });
 
-  await getImportQueue().add('process', { importId, uploadedById: imported.uploadedById });
+  try {
+    await getImportQueue().add('process', { importId, uploadedById: imported.uploadedById });
+  } catch (queueError) {
+    console.warn('[import-reprocess] Redis queue failed, falling back to inline:', queueError instanceof Error ? queueError.message : queueError);
+    await processImportInline({
+      importId,
+      filePath: imported.filePath,
+      totalRows: 0
+    });
+  }
   return prisma.import.findUniqueOrThrow({ where: { id: importId } });
 }
 

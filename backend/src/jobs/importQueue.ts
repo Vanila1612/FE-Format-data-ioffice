@@ -9,23 +9,26 @@ export type ImportJobData = {
   uploadedById: string;
 };
 
-export function buildConnection(): ConnectionOptions {
-  if (!env.REDIS_URL) {
+export function hasRedis(): boolean {
+  return Boolean(env.REDIS_URL && env.REDIS_URL.trim().length > 0);
+}
+
+export function buildConnectionOptions(): ConnectionOptions {
+  if (!hasRedis()) {
     throw new Error('REDIS_URL is not set. Configure Redis in .env before running the import worker.');
   }
   return {
-    // BullMQ chấp nhận URL trực tiếp
-    url: env.REDIS_URL,
+    url: env.REDIS_URL!,
     maxRetriesPerRequest: null,
     enableReadyCheck: false
   };
 }
 
 export function buildRedisClient(): Redis {
-  if (!env.REDIS_URL) {
+  if (!hasRedis()) {
     throw new Error('REDIS_URL is not set.');
   }
-  return new IORedis(env.REDIS_URL, {
+  return new IORedis(env.REDIS_URL!, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
   });
@@ -37,9 +40,12 @@ declare global {
 }
 
 export function getImportQueue(): Queue<ImportJobData> {
+  if (!hasRedis()) {
+    throw new Error('REDIS_URL is not set. Set REDIS_URL in env to use background imports.');
+  }
   if (!globalThis.__iofficeImportQueue) {
     globalThis.__iofficeImportQueue = new Queue<ImportJobData>(IMPORT_QUEUE_NAME, {
-      connection: buildConnection(),
+      connection: buildConnectionOptions(),
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5_000 },

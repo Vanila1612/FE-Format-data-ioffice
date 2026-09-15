@@ -161,7 +161,7 @@ export function ImportPage() {
     <label className="dropzone">
       <input type="file" accept=".xlsx,.xls" onChange={selectFile} />
       <FileUp size={34} />
-      <strong>{file ? file.name : 'Chọn hoặc kéo thả file Excel'}</strong>
+      <strong>{file ? file.name : 'Chọn file Excel'}</strong>
       <span>Đọc file, chuẩn hóa và kiểm tra trước khi lưu vào hệ thống.</span>
     </label>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { api, downloadFile, unwrap } from '../services/api';
@@ -47,16 +47,20 @@ export function DocumentsPage() {
   const importStatus = useQuery({
     queryKey: ['import-status', importId],
     enabled: Boolean(importId),
-    refetchInterval: (query) => {
-      const status = (query.state.data as ImportStatus | undefined)?.status;
-      return status && status !== 'PROCESSING' ? false : 1500;
-    },
+    refetchInterval: importId ? 1500 : false,
     queryFn: async () => unwrap<ImportStatus>(await api.get(`/imports/${importId}/status`))
   });
 
+  // Khi status đổi sang COMPLETED/FAILED, refetch documents 1 lần
+  const lastStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (importId && importStatus.data?.status !== 'PROCESSING') {
-      void documents.refetch();
+    if (!importId) return;
+    const status = importStatus.data?.status;
+    if (status && status !== lastStatusRef.current) {
+      lastStatusRef.current = status;
+      if (status !== 'PROCESSING') {
+        void documents.refetch();
+      }
     }
   }, [importId, importStatus.data?.status]);
   const remove = useMutation({ mutationFn: async (id: string) => unwrap(await api.delete(`/documents/${id}`)), onSuccess: async () => { toast.success('Đã xóa văn bản'); await documents.refetch(); }, onError: (error) => toast.error(error.message) });

@@ -7,7 +7,7 @@ import { prisma } from '../config/prisma.js';
 import { classifyDocument } from '../services/classificationService.js';
 import { parseWorkbook } from '../services/excelService.js';
 import { documentDedupeKey, normalizeDocument, normalizeNhnoReferenceUnit } from '../services/normalizationService.js';
-import { buildConnection, IMPORT_QUEUE_NAME, type ImportJobData } from './importQueue.js';
+import { buildConnectionOptions, IMPORT_QUEUE_NAME, type ImportJobData } from './importQueue.js';
 
 type ClassifiedDocument = ReturnType<typeof normalizeDocument> & {
   normalizedUnit: string;
@@ -18,8 +18,11 @@ async function markStatus(importId: string, data: Prisma.ImportUpdateInput) {
   await prisma.import.update({ where: { id: importId }, data });
 }
 
-async function processImport(job: Job<ImportJobData>): Promise<{ imported: number; total: number }> {
-  const { importId } = job.data;
+export type ProgressReporter = { updateProgress: (percent: number) => Promise<void> };
+
+const noopProgress: ProgressReporter = { updateProgress: async () => undefined };
+
+export async function runImportCore(importId: string, progress: ProgressReporter = noopProgress): Promise<{ imported: number; total: number }> {
   const imported = await prisma.import.findUnique({ where: { id: importId } });
   if (!imported) throw new Error(`Import ${importId} not found`);
   if (imported.status === 'COMPLETED') {
@@ -88,7 +91,7 @@ async function processImport(job: Job<ImportJobData>): Promise<{ imported: numbe
     }
     processed += slice.length;
 
-    await job.updateProgress(Math.floor((processed / total) * 100));
+    await progress.updateProgress(Math.floor((processed / total) * 100));
     await markStatus(importId, { processedRows: processed });
   }
 
@@ -104,6 +107,11 @@ async function processImport(job: Job<ImportJobData>): Promise<{ imported: numbe
   return { imported: inserted, total };
 }
 
+async function processImport(job: Job<ImportJobData>): Promise<{ imported: number; total: number }> {
+  const { importId } = job.data;
+  return runImportCore(importId, { updateProgress: (p) => job.updateProgress(p) });
+}
+
 let activeWorker: Worker<ImportJobData> | null = null;
 
 export function startImportWorker() {
@@ -112,7 +120,7 @@ export function startImportWorker() {
     IMPORT_QUEUE_NAME,
     async (job) => processImport(job),
     {
-      connection: buildConnection(),
+      connection: buildConnectionOptions(),
       concurrency: 1
     }
   );
