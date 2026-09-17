@@ -162,16 +162,44 @@ export async function reprocessImport(importId: string) {
 export async function deleteImport(importId: string) {
   const imported = await prisma.import.findUnique({ where: { id: importId } });
   if (!imported) throw new AppError(404, 'IMPORT_NOT_FOUND', 'Không tìm thấy lần nhập dữ liệu');
+
+  const wasBusy = imported.status === 'PROCESSING' || imported.status === 'UPLOADED';
+
   const snapshots = await prisma.snapshot.findMany({ where: { importId }, select: { id: true } });
   const snapshotIds = snapshots.map((snapshot) => snapshot.id);
-  await prisma.$transaction(async (tx) => {
+
+  // Xóa tuần tự (không dùng transaction) để tránh xung đột với worker đang insert documents.
+  // Worker dùng insertMany; deleteMany chạy độc lập — Mongo sẽ tự retry lỗi tạm thời.
+  try {
     if (snapshotIds.length) {
-      await tx.snapshotDocument.deleteMany({ where: { snapshotId: { in: snapshotIds } } });
-      await tx.snapshot.deleteMany({ where: { id: { in: snapshotIds } } });
+      await prisma.snapshotDocument.deleteMany({ where: { snapshotId: { in: snapshotIds } } });
+      await prisma.snapshot.deleteMany({ where: { id: { in: snapshotIds } } });
     }
-    await tx.document.deleteMany({ where: { importId } });
-    await tx.import.delete({ where: { id: importId } });
-  });
-  await fs.rm(imported.filePath, { force: true }).catch(() => undefined);
-  return { deleted: true, deletedSnapshots: snapshotIds.length };
+    // Xóa documents theo batch: findMany lấy id, deleteMany theo id
+    const BATCH = 1000;
+    let hasMore = true;
+    while (hasMore) {
+      const ids = await prisma.document.findMany({
+        where: { importId },
+        select: { id: true },
+        take: BATCH
+      });
+      if (ids.length === 0) {
+        hasMore = false;
+        break;
+      }
+      await prisma.document.deleteMany({ where: { id: { in: ids.map((d) => d.id) } } });
+      if (ids.length < BATCH) hasMore = false;
+    }
+    await prisma.import.delete({ where: { id: importId } });
+  } catch (error) {
+    console.error('[deleteImport] failed:', error);
+    throw new AppError(500, 'DELETE_FAILED', 'Không thể xóa lần nhập: ' + (error instanceof Error ? error.message : 'unknown error'));
+  }
+
+  // Xóa file đã lưu (nếu là file thật, không phải 'pending')
+  if (imported.filePath && imported.filePath !== 'pending') {
+    await fs.rm(imported.filePath, { force: true }).catch(() => undefined);
+  }
+  return { deleted: true, deletedSnapshots: snapshotIds.length, wasBusy };
 }
