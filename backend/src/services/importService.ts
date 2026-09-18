@@ -48,6 +48,7 @@ export async function previewImport(file: Express.Multer.File) {
 export async function enqueueImport(file: Express.Multer.File, uploadedById: string) {
   validateUpload(file);
   const parsed = parseWorkbook(file.buffer);
+  console.log(`[import-enqueue] received file="${file.originalname}" size=${file.size} rows=${parsed.rows.length} uploadedBy=${uploadedById}`);
 
   const importRecord = await prisma.import.create({
     data: {
@@ -61,18 +62,21 @@ export async function enqueueImport(file: Express.Multer.File, uploadedById: str
       uploadedById
     }
   });
+  console.log(`[import-enqueue] created import record id=${importRecord.id}`);
 
   const savedFile = await saveOriginalFile(file, importRecord.id);
   await prisma.import.update({
     where: { id: importRecord.id },
     data: { storedFileName: savedFile.storedFileName, filePath: savedFile.filePath }
   });
+  console.log(`[import-enqueue] saved file to ${savedFile.filePath}`);
 
   try {
-    await getImportQueue().add('process', { importId: importRecord.id, uploadedById });
+    const job = await getImportQueue().add('process', { importId: importRecord.id, uploadedById });
+    console.log(`[import-enqueue] enqueued job=${job.id} importId=${importRecord.id} redis=${process.env.REDIS_URL || '(unset)'}`);
   } catch (queueError) {
     // Redis không khả dụng → fallback xử lý inline đồng bộ (giống code cũ)
-    console.warn('[import] Redis queue failed, falling back to inline processing:', queueError instanceof Error ? queueError.message : queueError);
+    console.warn('[import-enqueue] Redis queue failed, falling back to inline processing:', queueError instanceof Error ? queueError.message : queueError);
     await processImportInline({
       importId: importRecord.id,
       filePath: savedFile.filePath,

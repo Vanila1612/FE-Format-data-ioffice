@@ -37,8 +37,10 @@ export async function runImportCore(importId: string, progress: ProgressReporter
   }
 
   await markStatus(importId, { status: 'PROCESSING', processedRows: 0, errorMessage: null });
+  console.log(`[import-worker] importId=${importId} status=PROCESSING, file=${imported.filePath}`);
 
   const parsed = parseWorkbook(buffer);
+  console.log(`[import-worker] importId=${importId} parsed rows=${parsed.rows.length}`);
   const [rules, mappings] = await Promise.all([
     prisma.classificationRule.findMany({ orderBy: [{ priority: 'asc' }, { keyword: 'asc' }] }),
     prisma.unitMapping.findMany()
@@ -90,8 +92,12 @@ export async function runImportCore(importId: string, progress: ProgressReporter
       }
     }
     processed += slice.length;
+    const percent = Math.floor((processed / total) * 100);
+    if (processed % (chunkSize * 5) === 0 || processed === total) {
+      console.log(`[import-worker] importId=${importId} progress ${processed}/${total} (${percent}%) inserted~${inserted}`);
+    }
 
-    await progress.updateProgress(Math.floor((processed / total) * 100));
+    await progress.updateProgress(percent);
     await markStatus(importId, { processedRows: processed });
   }
 
@@ -103,19 +109,34 @@ export async function runImportCore(importId: string, progress: ProgressReporter
     completedAt: new Date(),
     errorMessage: null
   });
+  console.log(`[import-worker] importId=${importId} COMPLETED inserted=${inserted}/${total}`);
 
   return { imported: inserted, total };
 }
 
 async function processImport(job: Job<ImportJobData>): Promise<{ imported: number; total: number }> {
   const { importId } = job.data;
-  return runImportCore(importId, { updateProgress: (p) => job.updateProgress(p) });
+  console.log(`[import-worker] picked job ${job.id} for importId=${importId} (attempt ${job.attemptsMade + 1}/${job.opts.attempts ?? 1})`);
+  const startedAt = Date.now();
+  try {
+    const result = await runImportCore(importId, { updateProgress: (p) => job.updateProgress(p) });
+    console.log(`[import-worker] job ${job.id} importId=${importId} done in ${((Date.now() - startedAt) / 1000).toFixed(1)}s (imported=${result.imported}/${result.total})`);
+    return result;
+  } catch (error) {
+    console.error(`[import-worker] job ${job.id} importId=${importId} failed:`, error instanceof Error ? error.message : error);
+    throw error;
+  }
 }
 
 let activeWorker: Worker<ImportJobData> | null = null;
 
 export function startImportWorker() {
   if (activeWorker) return activeWorker;
+  if (!env.REDIS_URL) {
+    console.error('[import-worker] REDIS_URL is not set — worker will NOT start. Set REDIS_URL in env and restart.');
+    throw new Error('REDIS_URL is not set');
+  }
+  console.log(`[import-worker] connecting to redis ${env.REDIS_URL} queue="${IMPORT_QUEUE_NAME}" concurrency=1`);
   activeWorker = new Worker<ImportJobData>(
     IMPORT_QUEUE_NAME,
     async (job) => processImport(job),
@@ -125,11 +146,18 @@ export function startImportWorker() {
     }
   );
 
+  activeWorker.on('ready', () => {
+    console.log(`[import-worker] ready — listening on queue "${IMPORT_QUEUE_NAME}"`);
+  });
+  activeWorker.on('stalled', (jobId) => {
+    console.warn(`[import-worker] job ${jobId} stalled (worker too slow or crashed mid-job)`);
+  });
   activeWorker.on('failed', async (job, error) => {
     if (!job) return;
     const { importId } = job.data;
     const attemptsMade = job.attemptsMade + 1;
     const maxAttempts = job.opts.attempts ?? 1;
+    console.warn(`[import-worker] job ${job.id} importId=${importId} failed attempt ${attemptsMade}/${maxAttempts}: ${error instanceof Error ? error.message : error}`);
     if (attemptsMade >= maxAttempts) {
       try {
         await prisma.import.update({
@@ -140,17 +168,21 @@ export function startImportWorker() {
             completedAt: new Date()
           }
         });
+        console.error(`[import-worker] importId=${importId} marked FAILED after ${attemptsMade} attempts`);
       } catch (updateError) {
-        console.error('Failed to mark import as FAILED:', updateError);
+        console.error('[import-worker] failed to mark import as FAILED:', updateError);
       }
     }
   });
 
   activeWorker.on('error', (error) => {
-    console.error('[import-worker] error:', error);
+    console.error('[import-worker] worker error:', error instanceof Error ? error.message : error);
   });
 
-  console.log(`[import-worker] listening on queue "${IMPORT_QUEUE_NAME}" (redis: ${new URL(env.REDIS_URL ?? '').host})`);
+  activeWorker.on('closed', () => {
+    console.log('[import-worker] worker closed');
+  });
+
   return activeWorker;
 }
 
