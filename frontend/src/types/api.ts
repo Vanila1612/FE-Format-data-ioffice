@@ -47,12 +47,15 @@ export type Paged<T> = {
   totalPages: number;
 };
 
+export type MonthlyBucket = { key: string; label: string; total: number; signed: number; signRate: number };
+
 export type Summary = {
   totals: { total: number; signed: number; unsigned: number; signRate: number };
   byGroup: { key: DocumentGroup; label: string; total: number }[];
   byUnit: { unit: string; total: number; signed: number; unsigned: number; signRate: number }[];
   boardRows: ResultBoardRow[];
   signerBoardRows?: SignerBoardRow[];
+  byMonth?: MonthlyBucket[];
 };
 
 export type SignerBoardRow = {

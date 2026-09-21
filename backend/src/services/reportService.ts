@@ -92,6 +92,32 @@ export async function listDocuments(filters: DocumentFilters, page: number, page
   return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
 }
 
+export type MonthlyBucket = { key: string; label: string; total: number; signed: number; signRate: number };
+
+function monthKey(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+export function buildMonthlyBuckets(documents: { issueDate?: Date | null; signedDocument: string }[]): MonthlyBucket[] {
+  const map = new Map<string, { key: string; label: string; total: number; signed: number }>();
+  for (const document of documents) {
+    if (!document.issueDate) continue;
+    const date = document.issueDate;
+    const key = monthKey(date);
+    const [year, month] = key.split('-');
+    const label = `${month}/${year}`;
+    if (!map.has(key)) map.set(key, { key, label, total: 0, signed: 0 });
+    const row = map.get(key)!;
+    row.total += 1;
+    if (isSignedDocument(document.signedDocument)) row.signed += 1;
+  }
+  return [...map.values()]
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((row) => ({ key: row.key, label: row.label, total: row.total, signed: row.signed, signRate: percentage(row.signed, row.total) }));
+}
+
 function percentage(value: number, total: number) {
   return total ? Number(((value / total) * 100).toFixed(1)) : 0;
 }
@@ -146,7 +172,8 @@ export function summaryFromDocuments(documents: SummaryDocument[]) {
     byGroup: Object.values(byGroup),
     byUnit: [...byUnit.values()].sort((a, b) => b.total - a.total),
     boardRows,
-    signerBoardRows: buildSignerBoard(reportableDocuments)
+    signerBoardRows: buildSignerBoard(reportableDocuments),
+    byMonth: buildMonthlyBuckets(reportableDocuments)
   };
 }
 
