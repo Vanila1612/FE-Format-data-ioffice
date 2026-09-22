@@ -98,7 +98,10 @@ export async function runImportCore(importId: string, progress: ProgressReporter
     }
 
     await progress.updateProgress(percent);
-    await markStatus(importId, { processedRows: processed });
+    // Chỉ ghi DB mỗi 5000 dòng (hoặc khi kết thúc) — giảm ~10 lần round-trip.
+    if (processed === total || processed % 5000 === 0) {
+      await markStatus(importId, { processedRows: processed });
+    }
   }
 
   await markStatus(importId, {

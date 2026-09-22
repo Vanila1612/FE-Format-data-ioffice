@@ -82,6 +82,10 @@ export function ImportPage() {
   }, []);
 
   async function pollStatus(importId: string, startedAt: number) {
+    let errorStreak = 0;
+    const stop = () => {
+      if (pollingRef.current) { window.clearInterval(pollingRef.current); pollingRef.current = null; }
+    };
     const tick = async () => {
       try {
         const status = await unwrap<{
@@ -92,41 +96,43 @@ export function ImportPage() {
           progress: number;
           errorMessage: string | null;
         }>(await api.get(`/imports/${importId}/status`));
+        errorStreak = 0;
+        const total = status.totalRows || 1;
         setActiveJob((prev) => prev ? {
           ...prev,
           status: status.status,
           totalRows: status.totalRows,
           processedRows: status.processedRows,
-          progress: status.progress,
+          progress: Math.min(100, Math.round((status.processedRows / total) * 100)),
           errorMessage: status.errorMessage ?? undefined
         } : prev);
 
         if (status.status === 'COMPLETED') {
-          if (pollingRef.current) window.clearInterval(pollingRef.current);
-          pollingRef.current = null;
+          stop();
+          setSaving(false);
           toast.success(`Đã lưu ${status.totalRows} văn bản vào hệ thống`);
           navigate(`/documents?importId=${importId}`);
           return;
         }
         if (status.status === 'FAILED') {
-          if (pollingRef.current) window.clearInterval(pollingRef.current);
-          pollingRef.current = null;
+          stop();
+          setSaving(false);
+          toast.error(status.errorMessage || 'Quá trình nhập dữ liệu thất bại');
           return;
         }
-        // Poll tiếp nếu vẫn PROCESSING
-        const elapsed = Date.now() - startedAt;
-        if (elapsed > 1000 * 60 * 30) {
-          // timeout 30 phút — dừng poll để tránh treo
-          if (pollingRef.current) window.clearInterval(pollingRef.current);
-          pollingRef.current = null;
+        if (Date.now() - startedAt > 1000 * 60 * 30) {
+          stop();
+          setSaving(false);
           toast.error('Quá thời gian chờ (30 phút). Vui lòng thử lại.');
         }
       } catch (error) {
-        // Lỗi mạng tạm thời — thử poll lại vòng sau
-        console.warn('poll status error', error);
+        errorStreak += 1;
+        // Sau 3 lần lỗi liên tiếp mới toast — tránh spam khi mạng chập chờn.
+        if (errorStreak === 3) {
+          toast.error(error instanceof Error ? error.message : 'Mất kết nối tới máy chủ — đang thử lại');
+        }
       }
     };
-    // gọi ngay 1 lần + setInterval
     void tick();
     pollingRef.current = window.setInterval(tick, 1500);
   }
@@ -137,16 +143,26 @@ export function ImportPage() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const saved = await unwrap<{ import: { id: string; totalRows: number } }>(await api.post('/imports', form));
+      const saved = await unwrap<{
+        import: { id: string; totalRows: number; processedRows: number; status: 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'UPLOADED' };
+      }>(await api.post('/imports', form));
       const startedAt = Date.now();
+      const total = saved.import.totalRows || result.documents.length;
       setActiveJob({
         importId: saved.import.id,
-        totalRows: saved.import.totalRows ?? result.documents.length,
-        processedRows: 0,
-        status: 'PROCESSING',
-        progress: 0,
+        totalRows: total,
+        processedRows: saved.import.processedRows || 0,
+        status: saved.import.status,
+        progress: total ? Math.min(100, Math.round(((saved.import.processedRows || 0) / total) * 100)) : 0,
         startedAt
       });
+      // Inline fallback (Redis down) đã xử lý xong ngay trong request — không cần poll.
+      if (saved.import.status === 'COMPLETED') {
+        setSaving(false);
+        toast.success(`Đã lưu ${total} văn bản vào hệ thống`);
+        navigate(`/documents?importId=${saved.import.id}`);
+        return;
+      }
       await pollStatus(saved.import.id, startedAt);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Không thể lưu dữ liệu vào cơ sở dữ liệu');
@@ -179,7 +195,7 @@ export function ImportPage() {
       <span>{result.missingColumns.join(', ')}</span>
     </div> : null}
 
-    {result && !result.missingColumns.length && <><div className="toolbar"><button disabled={saving || (activeJob?.status === 'PROCESSING')} onClick={saveToDatabase}>{activeJob?.status === 'PROCESSING' ? `Đang lưu ${activeJob.progress}%` : saving ? 'Đang upload' : 'Lưu vào hệ thống'}</button><span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span></div>
+    {result && !result.missingColumns.length && <><div className="toolbar"><button disabled={saving || activeJob?.status === 'PROCESSING' || activeJob?.status === 'COMPLETED'} onClick={saveToDatabase}>{activeJob?.status === 'PROCESSING' ? `Đang lưu ${activeJob.progress}%` : activeJob?.status === 'COMPLETED' ? 'Đã lưu' : saving ? 'Đang upload' : 'Lưu vào hệ thống'}</button><span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span></div>
       {activeJob && (
         <div className="panel import-progress">
           <div className="import-progress-head">

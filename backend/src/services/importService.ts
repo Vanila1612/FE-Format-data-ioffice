@@ -172,28 +172,29 @@ export async function deleteImport(importId: string) {
   const snapshots = await prisma.snapshot.findMany({ where: { importId }, select: { id: true } });
   const snapshotIds = snapshots.map((snapshot) => snapshot.id);
 
-  // Xóa tuần tự (không dùng transaction) để tránh xung đột với worker đang insert documents.
-  // Worker dùng insertMany; deleteMany chạy độc lập — Mongo sẽ tự retry lỗi tạm thời.
+  // Xóa documents:
+  // - Nếu đang xử lý (worker có thể vẫn insert): chunk để tránh xung đột.
+  // - Nếu đã hoàn tất: 1 lệnh deleteMany — giảm từ ~92 round-trip xuống 1.
   try {
     if (snapshotIds.length) {
       await prisma.snapshotDocument.deleteMany({ where: { snapshotId: { in: snapshotIds } } });
       await prisma.snapshot.deleteMany({ where: { id: { in: snapshotIds } } });
     }
-    // Xóa documents theo batch: findMany lấy id, deleteMany theo id
-    const BATCH = 1000;
-    let hasMore = true;
-    while (hasMore) {
-      const ids = await prisma.document.findMany({
-        where: { importId },
-        select: { id: true },
-        take: BATCH
-      });
-      if (ids.length === 0) {
-        hasMore = false;
-        break;
+    if (wasBusy) {
+      const BATCH = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const ids = await prisma.document.findMany({
+          where: { importId },
+          select: { id: true },
+          take: BATCH
+        });
+        if (ids.length === 0) { hasMore = false; break; }
+        await prisma.document.deleteMany({ where: { id: { in: ids.map((d) => d.id) } } });
+        if (ids.length < BATCH) hasMore = false;
       }
-      await prisma.document.deleteMany({ where: { id: { in: ids.map((d) => d.id) } } });
-      if (ids.length < BATCH) hasMore = false;
+    } else {
+      await prisma.document.deleteMany({ where: { importId } });
     }
     await prisma.import.delete({ where: { id: importId } });
   } catch (error) {

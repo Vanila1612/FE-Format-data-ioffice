@@ -97,7 +97,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["node", "/app/node_modules/tsx/dist/cli.mjs", "scripts/worker.ts"]
+    command: ["node", "/app/backend/dist/scripts/worker.js"]
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-ioffice}:${MONGO_INITDB_ROOT_PASSWORD:-ioffice}@mongo:27017/${MONGO_INITDB_DATABASE:-ioffice}?authSource=admin&replicaSet=rs0
