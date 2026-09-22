@@ -1,5 +1,12 @@
-import 'dotenv/config';
-import { startImportWorker, stopImportWorker } from '../src/jobs/importProcessor.js';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+// Match docker-compose cwd (/app/backend). Repo root is one level up.
+for (const candidate of ['.env.prod', '.env']) {
+  dotenv.config({ path: path.resolve(process.cwd(), '..', candidate) });
+}
+
+const { startImportWorker, stopImportWorker } = await import('../src/jobs/importProcessor.js');
 
 async function main() {
   console.log('[worker] starting…');

@@ -12,5 +12,5 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["src", "prisma", "tests", "fixtures"]
+  "include": ["src", "prisma", "tests", "fixtures", "scripts"]
 }

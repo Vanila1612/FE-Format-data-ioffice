@@ -7,6 +7,7 @@ COPY backend backend
 
 RUN npm config set strict-ssl false
 RUN npm install --loglevel verbose
+RUN npm install -g pnpm@9
 RUN NODE_TLS_REJECT_UNAUTHORIZED=0 npx prisma generate --schema backend/prisma/schema.prisma && npx tsc -p backend/tsconfig.json
 
 ENV NODE_ENV=production

@@ -18,17 +18,13 @@ export function ImportsPage() {
   return <section className="panel">
     {imports.data!.length === 0 ? <EmptyState /> : <div className="table-scroll"><table><thead><tr><th>Tên file</th><th>Người nhập</th><th>Thời gian</th><th>Trạng thái</th><th>Tổng</th><th>Thành công</th><th>Lỗi</th><th>Dữ liệu</th><th>Xuất file</th>{user?.role === 'ADMIN' && <><th>Khôi phục</th><th>Xóa</th></>}</tr></thead><tbody>{imports.data!.map((item) => <tr key={item.id}><td>{item.originalFileName}</td><td>{item.uploadedBy?.displayName}</td><td>{dateText(item.createdAt)}</td><td><span className="pill">{item.status}</span></td><td>{numberText(item.totalRows)}</td><td>{numberText(item.successRows)}</td><td>{numberText(item.failedRows)}</td><td><Link to={`/documents?importId=${item.id}`}>Xem dữ liệu</Link></td><td><button className="secondary" onClick={() => void downloadFile(`/imports/${item.id}/export`).catch((error) => toast.error(error.message))}>Excel</button></td>{user?.role === 'ADMIN' && <><td><button className="secondary" disabled={reprocess.isPending} onClick={() => reprocess.mutate(item.id)}>Đọc lại file gốc</button></td><td><button className="danger" disabled={remove.isPending} onClick={() => {
   const isBusy = item.status === 'PROCESSING' || item.status === 'UPLOADED';
+  const name = item.originalFileName;
+  const count = numberText(item.totalRows);
   if (isBusy) {
-    const first = confirm(`File "${item.originalFileName}" đang được xử lý. Bạn có chắc muốn xóa? Hành động này có thể làm worker bị lỗi nhưng sẽ dọn được các import kẹt từ trước.`);
-    if (!first) return;
-    const second = confirm(`Xác nhận lần 2: Xóa lần nhập đang xử lý?`);
-    if (!second) return;
-    remove.mutate(item.id);
-    return;
+    if (!confirm(`File "${name}" đang xử lý (${count} dòng). Xóa ngay sẽ dừng worker, dùng để dọn các import kẹt. Tiếp tục?`)) return;
   }
-  if (confirm(`Xóa toàn bộ dữ liệu của file "${item.originalFileName}"? Thao tác này không thể hoàn tác.`)) {
-    remove.mutate(item.id);
-  }
+  if (!confirm(`Xóa toàn bộ dữ liệu của "${name}" (${count} dòng và mọi snapshot liên quan)? Không thể hoàn tác.`)) return;
+  remove.mutate(item.id);
 }}>Xóa</button></td></>}</tr>)}</tbody></table></div>}
   </section>;
 }

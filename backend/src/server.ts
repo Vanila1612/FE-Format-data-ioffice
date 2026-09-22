@@ -1,5 +1,15 @@
-import { env } from './config/env.js';
-import { createApp } from './app.js';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+// Load env from project root regardless of cwd so REDIS_URL/JWT_SECRET/etc.
+// are available in production containers where CWD != repo root.
+for (const candidate of ['.env.prod', '.env']) {
+  const filePath = path.resolve(process.cwd(), '..', candidate);
+  dotenv.config({ path: filePath });
+}
+
+const { env } = await import('./config/env.js');
+const { createApp } = await import('./app.js');
 
 const app = createApp();
 
