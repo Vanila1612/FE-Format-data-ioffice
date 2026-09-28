@@ -59,7 +59,7 @@ export async function runImportCore(importId: string, progress: ProgressReporter
       const normalized = normalizeDocument(row, mappings);
       const classified = classifyDocument(normalized, rules);
       const normalizedUnit = classified.useReferenceSuffix
-        ? normalizeNhnoReferenceUnit(normalized.referenceNumber, mappings) || ''
+        ? normalizeNhnoReferenceUnit(normalized.referenceNumber, mappings)
         : classified.normalizedUnit;
       return { ...normalized, normalizedUnit, documentGroup: classified.documentGroup };
     });

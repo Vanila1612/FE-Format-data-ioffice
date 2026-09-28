@@ -4,6 +4,7 @@ ENV NODE_ENV=production
 
 COPY package.json pnpm-workspace.yaml ./
 COPY backend/package.json backend/package.json
+COPY backend/prisma backend/prisma
 COPY backend/dist backend/dist
 COPY node_modules node_modules
 COPY backend/node_modules backend/node_modules

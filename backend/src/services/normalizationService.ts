@@ -188,7 +188,33 @@ const NHNO_REFERENCE_UNIT_MAPPINGS: Record<string, string> = {
   'ktnb': 'Ban Kiểm tra, giám sát nội bộ',
   'tdtcb': 'Trường đào tạo cán bộ',
   'tttm': 'Trung tâm Tài trợ Thương Mại',
-  'bqle3': 'Ban QLE3'
+  'bqle3': 'Ban QLE3',
+  // Các mã NHNo phát sinh trong dữ liệu rà soát ngày 22/09/2026.
+  // Tên đơn vị được nghiệp vụ xác nhận; biến thể có đuôi số (KHCL1, ALCO1, ...) cũng map về cùng đơn vị.
+  'khcl': 'Ban Khách hàng chiến lược',
+  'tckt': 'Ban Tài chính kế toán',
+  'khdn': 'Ban Khách hàng doanh nghiệp',
+  'ktgs': 'Ban Kiểm tra, giám sát nội bộ',
+  'hdl': 'Hội đồng lương',
+  'hdms tt': 'Hội đồng lương',
+  'alco1': 'Ban quản lý tài sản và nợ',
+  'qlgs1': 'Ban quản lý tài sản và nợ',
+  'aln': 'Quản lý nợ',
+  'qln': 'Quản lý nợ',
+  'pcrt': 'Phòng chống rửa tiền',
+  'kh qlrr': 'Ban Khách hàng và Quản lý rủi ro',
+  'khqlrr': 'Ban Khách hàng và Quản lý rủi ro',
+  'ubkt': 'Ủy ban kiểm tra',
+  'cntt': 'Trung tâm Công nghệ thông tin',
+  'ttkh 2': 'Trung tâm Kiều hối',
+  'td': 'Ban Thẩm định và phê duyệt tín dụng',
+  'pdt d': 'Ban Thẩm định và phê duyệt tín dụng',
+  'tknq': 'Kiểm toán nội bộ',
+  'hcqt': 'Ban Hành chính - Quản trị',
+  'hcns': 'Ban Hành chính - Nhân sự',
+  'cksh': 'Ban Khách hàng cá nhân',
+  'kth': 'Ban Thư ký tổng hợp',
+  'fic': 'Trung tâm Tài chính'
 };
 
 export function normalizeHeader(value: unknown): string {
@@ -231,16 +257,26 @@ export function unitSuffixFromReference(referenceNumber: string): string | null 
   return parts.length > 1 ? parts.at(-1) || null : null;
 }
 
-/** Returns null when the NHNo suffix has no approved mapping, so it is omitted from the report. */
-export function normalizeNhnoReferenceUnit(referenceNumber: string, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[]): string | null {
+// Trailing digits/dots on NHNo suffixes are typos (KHCL1, ALCO1, TCKT., ...).
+// Normalize to the canonical key before lookup so a single rule covers all variants.
+function canonicalNhnoSuffix(key: string): string {
+  return key.replace(/[.\d]+$/, '');
+}
+
+/** Returns 'Văn phòng TSC' (Trụ sở chính) as a safe fallback when an NHNo document has no
+ *  suffix or its suffix has no approved mapping, so the row is still counted in the report. */
+const NHNO_DEFAULT_UNIT = 'Văn phòng TSC';
+
+export function normalizeNhnoReferenceUnit(referenceNumber: string, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[]): string {
   const suffix = unitSuffixFromReference(referenceNumber);
-  if (!suffix) return null;
+  if (!suffix) return NHNO_DEFAULT_UNIT;
   const key = comparisonKey(suffix);
   if (/^ttt(?: \d+)?$/.test(key)) return 'Trung tâm Thẻ';
-  const builtIn = NHNO_REFERENCE_UNIT_MAPPINGS[key];
+  const builtIn = NHNO_REFERENCE_UNIT_MAPPINGS[key] ?? NHNO_REFERENCE_UNIT_MAPPINGS[canonicalNhnoSuffix(key)];
   if (builtIn) return builtIn;
-  const mapping = mappings.find((item) => comparisonKey(item.sourceName) === key);
-  return mapping ? normalizeText(mapping.normalizedName) : null;
+  const mapping = mappings.find((item) => comparisonKey(item.sourceName) === key)
+    ?? mappings.find((item) => comparisonKey(item.sourceName) === canonicalNhnoSuffix(key));
+  return mapping ? normalizeText(mapping.normalizedName) : NHNO_DEFAULT_UNIT;
 }
 
 /** Reads the "Người ký chính" column whether the workbook uses the legacy uppercase
