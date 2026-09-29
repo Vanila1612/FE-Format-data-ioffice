@@ -46,16 +46,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-ioffice}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/${MONGO_INITDB_DATABASE:-ioffice}?authSource=admin&replicaSet=rs0
-      JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN}
+      DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-ioffice}:${MONGO_INITDB_ROOT_PASSWORD:?required}@mongo:27017/${MONGO_INITDB_DATABASE:-ioffice}?authSource=admin&replicaSet=rs0
       UPLOAD_DIR: /app/storage/uploads
       EXPORT_DIR: /app/storage/exports
       SNAPSHOT_DIR: /app/storage/snapshots
-      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-50}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-System Admin}
       REDIS_URL: redis://redis:6379
       WORKER_ONLY: "0"
     volumes:
@@ -65,6 +59,12 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >-
+        node node_modules/tsx/dist/cli.mjs prisma/seed.ts &&
+        node dist/src/server.js
     restart: unless-stopped
 
   frontend:
@@ -94,12 +94,12 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["sh", "-c", "cd /app && pnpm --filter @ioffice/backend exec tsx scripts/worker.ts"]
+    command: ["node", "/app/backend/dist/scripts/worker.js"]
     env_file:
       - .env.prod
     environment:
       NODE_ENV: production
-      DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-ioffice}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/${MONGO_INITDB_DATABASE:-ioffice}?authSource=admin&replicaSet=rs0
+      DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-ioffice}:${MONGO_INITDB_ROOT_PASSWORD:?required}@mongo:27017/${MONGO_INITDB_DATABASE:-ioffice}?authSource=admin&replicaSet=rs0
       REDIS_URL: redis://redis:6379
       WORKER_ONLY: "1"
       UPLOAD_DIR: /app/storage/uploads
