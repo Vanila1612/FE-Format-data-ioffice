@@ -34,8 +34,8 @@ services:
       - >-
         mongosh --host mongo:27017 --username "$$MONGO_INITDB_ROOT_USERNAME"
         --password "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet
-        --eval 'try { rs.status().ok } catch (error) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}); }'
-    restart: unless-stopped
+        --eval 'try { rs.status().ok } catch (error) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}); }' && exit 0
+    restart: "no"
 
   backend:
     build:
