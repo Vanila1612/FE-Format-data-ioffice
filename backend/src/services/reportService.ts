@@ -28,6 +28,7 @@ type SummaryDocument = {
   issuingUnit: string;
   signedDocument: string;
   signerName?: string | null;
+  issueDate?: Date | null;
 };
 
 export type SignerBoardRow = {
@@ -177,6 +178,45 @@ export function summaryFromDocuments(documents: SummaryDocument[]) {
   };
 }
 
+const SUMMARY_CACHE_TTL_MS = 30_000;
+const SUMMARY_DOCUMENT_SELECT = {
+  documentGroup: true,
+  normalizedUnit: true,
+  issuingUnit: true,
+  signedDocument: true,
+  signerName: true,
+  issueDate: true
+} satisfies Prisma.DocumentSelect;
+
+type SummaryResult = ReturnType<typeof summaryFromDocuments>;
+type SummaryCacheEntry = { expiresAt: number; value: SummaryResult };
+const summaryCache = new Map<string, SummaryCacheEntry>();
+
+function summaryCacheKey(filters: DocumentFilters): string {
+  return JSON.stringify({
+    importId: filters.importId || '',
+    search: filters.search || '',
+    unit: filters.unit || '',
+    group: filters.group || '',
+    from: filters.from ? filters.from.toISOString() : '',
+    to: filters.to ? filters.to.toISOString() : ''
+  });
+}
+
 export async function summary(filters: DocumentFilters) {
-  return summaryFromDocuments(await prisma.document.findMany({ where: buildDocumentWhere(filters) }));
+  const cacheKey = summaryCacheKey(filters);
+  const cached = summaryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const startedAt = Date.now();
+  const value = summaryFromDocuments(await prisma.document.findMany({
+    where: buildDocumentWhere(filters),
+    select: SUMMARY_DOCUMENT_SELECT
+  }));
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs > 1_000) {
+    console.warn(`[reports] summary took ${elapsedMs}ms documents=${value.totals.total}`);
+  }
+  summaryCache.set(cacheKey, { expiresAt: Date.now() + SUMMARY_CACHE_TTL_MS, value });
+  return value;
 }

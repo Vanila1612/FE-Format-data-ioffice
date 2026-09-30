@@ -109,6 +109,12 @@ cp .env.prod.example .env.prod
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+One-command VPS deploy after `.env.prod` is configured:
+
+```bash
+sh scripts/nhs-format-ioffice.sh
+```
+
 Production health checks:
 
 ```bash
