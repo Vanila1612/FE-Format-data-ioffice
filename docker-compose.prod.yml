@@ -63,7 +63,7 @@ services:
       - sh
       - -c
       - >-
-        node node_modules/tsx/dist/cli.mjs prisma/seed.ts &&
+        node dist/prisma/seed.js &&
         node dist/src/server.js
     restart: unless-stopped
 
