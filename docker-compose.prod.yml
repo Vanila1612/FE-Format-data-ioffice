@@ -63,6 +63,8 @@ services:
       - sh
       - -c
       - >-
+        cd /app/backend &&
+        PRISMA_SCHEMA_PATH=/app/backend/prisma/schema.prisma node node_modules/prisma/build/index.js db push --skip-generate &&
         node dist/prisma/seed.js &&
         node dist/src/server.js
     restart: unless-stopped
