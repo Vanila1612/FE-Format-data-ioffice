@@ -104,8 +104,24 @@ docker compose up -d --build
 Production stack:
 
 ```bash
+cp .env.prod.example .env.prod
+# Edit .env.prod before starting the stack.
 docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+Production health checks:
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=120 backend
+curl http://localhost:5173/api/health
+```
+
+If the browser shows `502 Bad Gateway` for `/api/...`, the frontend is running but
+nginx cannot reach the backend container. Check `backend` logs first. Common VPS
+causes are a missing `.env.prod`, missing `MONGO_INITDB_ROOT_PASSWORD`, changing
+Mongo credentials after the `mongo_data` volume already exists, or using
+unescaped special characters in the Mongo password.
 
 Persistent volumes:
 

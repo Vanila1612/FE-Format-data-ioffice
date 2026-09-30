@@ -1,6 +1,14 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const booleanFromEnv = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off', ''].includes(normalized)) return false;
+  return value;
+}, z.boolean());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3001),
@@ -19,7 +27,7 @@ const envSchema = z.object({
   OPENAI_BASE_URL: z.string().optional(),
   AI_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(6),
   REDIS_URL: z.string().optional(),
-  WORKER_ONLY: z.coerce.boolean().default(false),
+  WORKER_ONLY: booleanFromEnv.default(false),
   IMPORT_CHUNK_SIZE: z.coerce.number().int().min(50).max(10_000).default(500)
 });
 
