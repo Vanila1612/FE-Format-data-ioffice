@@ -22,6 +22,11 @@ export type ImportRecord = {
   completedAt?: string;
   errorMessage?: string;
   uploadedBy?: User;
+  // Lưu sẵn trên Import — tránh $lookup vượt 100MB khi list (xem error 4568).
+  // undefined ở document cũ (import trước khi triển khai) → fallback 0 tại nơi dùng.
+  documentsCount?: number;
+  snapshotsCount?: number;
+  // Deprecated: không còn trả về, giữ optional cho back-compat.
   _count?: { documents: number; snapshots: number };
 };
 

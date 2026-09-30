@@ -55,6 +55,8 @@ model Import {
   completedAt      DateTime?
   processedRows    Int          @default(0)
   errorMessage     String?
+  documentsCount   Int          @default(0)
+  snapshotsCount   Int          @default(0)
   documents        Document[]
   snapshots        Snapshot[]
 

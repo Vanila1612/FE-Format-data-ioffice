@@ -15,7 +15,14 @@ type ClassifiedDocument = ReturnType<typeof normalizeDocument> & {
 };
 
 async function markStatus(importId: string, data: Prisma.ImportUpdateInput) {
-  await prisma.import.update({ where: { id: importId }, data });
+  // Keep documentsCount in sync with successRows (the worker's source of truth).
+  // Doing it in markStatus avoids N+1 counts on list/detail handlers and dodges the
+  // MongoDB 100MB $lookup-stage limit when imports grow large (e.g. 91k docs).
+  const dataWithCount: Prisma.ImportUpdateInput =
+    typeof data.successRows === 'number'
+      ? { ...data, documentsCount: data.successRows }
+      : data;
+  await prisma.import.update({ where: { id: importId }, data: dataWithCount });
 }
 
 export type ProgressReporter = { updateProgress: (percent: number) => Promise<void> };

@@ -62,7 +62,7 @@ importRoutes.post('/reprocess-all', requireAdmin, asyncHandler(async (_req, res)
 importRoutes.get('/list', asyncHandler(async (_req, res) => {
   const imports = await prisma.import.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { uploadedBy: { select: { id: true, username: true, displayName: true } }, _count: { select: { documents: true, snapshots: true } } }
+    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } }
   });
   return ok(res, imports);
 }));
@@ -93,7 +93,7 @@ importRoutes.get('/:id/export', asyncHandler(async (req, res) => {
 importRoutes.get('/:id', asyncHandler(async (req, res) => {
   const imported = await prisma.import.findUnique({
     where: { id: param(req, 'id') },
-    include: { uploadedBy: { select: { id: true, username: true, displayName: true } }, _count: { select: { documents: true, snapshots: true } } }
+    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } }
   });
   if (!imported) throw new AppError(404, 'IMPORT_NOT_FOUND', 'Import not found');
   return ok(res, imported);
@@ -106,7 +106,7 @@ importRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
 importRoutes.get('/', asyncHandler(async (_req, res) => {
   const imports = await prisma.import.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { uploadedBy: { select: { id: true, username: true, displayName: true } }, _count: { select: { documents: true, snapshots: true } } }
+    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } }
   });
   return ok(res, imports);
 }));
