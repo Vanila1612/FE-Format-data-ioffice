@@ -61,10 +61,15 @@ importRoutes.post('/reprocess-all', requireAdmin, asyncHandler(async (_req, res)
 
 importRoutes.get('/list', asyncHandler(async (_req, res) => {
   const imports = await prisma.import.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } }
+    orderBy: { createdAt: 'desc' }
   });
-  return ok(res, imports);
+  const userIds = [...new Set(imports.map((entry) => entry.uploadedById))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, username: true, displayName: true }
+  });
+  const userMap = new Map(users.map((user) => [user.id, user]));
+  return ok(res, imports.map((entry) => ({ ...entry, uploadedBy: userMap.get(entry.uploadedById) ?? null })));
 }));
 
 importRoutes.get('/:id/status', asyncHandler(async (req, res) => {
@@ -105,10 +110,15 @@ importRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
 
 importRoutes.get('/', asyncHandler(async (_req, res) => {
   const imports = await prisma.import.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } }
+    orderBy: { createdAt: 'desc' }
   });
-  return ok(res, imports);
+  const userIds = [...new Set(imports.map((entry) => entry.uploadedById))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, username: true, displayName: true }
+  });
+  const userMap = new Map(users.map((user) => [user.id, user]));
+  return ok(res, imports.map((entry) => ({ ...entry, uploadedBy: userMap.get(entry.uploadedById) ?? null })));
 }));
 
 importRoutes.delete('/', requireAdmin, asyncHandler(async (_req, res) => {
