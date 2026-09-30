@@ -97,11 +97,16 @@ importRoutes.get('/:id/export', asyncHandler(async (req, res) => {
 // Catch-all cho /:id ở cuối
 importRoutes.get('/:id', asyncHandler(async (req, res) => {
   const imported = await prisma.import.findUnique({
-    where: { id: param(req, 'id') },
-    include: { uploadedBy: { select: { id: true, username: true, displayName: true } } }
+    where: { id: param(req, 'id') }
   });
   if (!imported) throw new AppError(404, 'IMPORT_NOT_FOUND', 'Import not found');
-  return ok(res, imported);
+  const uploader = imported.uploadedById
+    ? await prisma.user.findUnique({
+        where: { id: imported.uploadedById },
+        select: { id: true, username: true, displayName: true }
+      })
+    : null;
+  return ok(res, { ...imported, uploadedBy: uploader });
 }));
 
 importRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {

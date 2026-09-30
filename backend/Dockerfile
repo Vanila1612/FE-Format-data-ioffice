@@ -2,12 +2,19 @@ FROM node:22
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY package.json pnpm-workspace.yaml ./
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy workspace manifest & package files for dependency install
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY backend/package.json backend/package.json
-COPY backend/prisma backend/prisma
-COPY backend/dist backend/dist
-COPY node_modules node_modules
-COPY backend/node_modules backend/node_modules
+
+# Install all dependencies (incl. devDeps needed to build)
+RUN pnpm install --frozen-lockfile
+
+# Copy source & build
+COPY backend backend
+RUN pnpm --filter backend build
 
 WORKDIR /app/backend
 EXPOSE 3001
