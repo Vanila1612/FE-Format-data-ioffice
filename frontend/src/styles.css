@@ -8,6 +8,7 @@
   --primary: #0f6b5b;
   --primary-strong: #0b4d43;
   --danger: #b42318;
+  --brand-red: #c8102e;
 }
 
 * { box-sizing: border-box; }
@@ -39,11 +40,22 @@ input, select {
 }
 
 .app-shell { display: grid; grid-template-columns: 252px 1fr; min-height: 100vh; }
-.sidebar { background: #101a17; color: #d8e4df; padding: 22px 16px; }
-.brand { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 19px; font-weight: 850; margin-bottom: 28px; }
-.sidebar nav { display: grid; gap: 4px; }
-.sidebar a { display: flex; align-items: center; gap: 10px; color: #aab9b3; text-decoration: none; padding: 11px 12px; border-radius: 6px; font-size: 14px; font-weight: 700; }
-.sidebar a.active { background: #18362f; color: #fff; }
+.sidebar { background: #fff; color: #17201c; padding: 22px 14px; border-right: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 12px; padding: 0 6px 22px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-text strong { color: var(--brand-red); font-size: 20px; font-weight: 900; letter-spacing: 0.5px; }
+.brand-text small { color: var(--brand-red); font-size: 9.5px; font-weight: 800; letter-spacing: 0.6px; margin-top: 4px; }
+.sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-item, .nav-group-head { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 6px; font-size: 14px; font-weight: 700; text-decoration: none; color: #3a4844; background: none; border: 0; cursor: pointer; width: 100%; text-align: left; font-family: inherit; }
+.nav-item:hover, .nav-group-head:hover { background: #f3f5f6; }
+.nav-item.active, .nav-item.active:hover { background: var(--brand-red) !important; color: #fff !important; }
+.nav-item.active svg { color: #fff; }
+.nav-group { display: flex; flex-direction: column; }
+.nav-group-head { color: #3a4844; }
+.nav-group-head .chev { margin-left: auto; font-size: 12px; transition: transform .15s; }
+.nav-group-head .chev.open { transform: rotate(180deg); }
+.nav-group-body { display: flex; flex-direction: column; gap: 2px; padding: 4px 0 6px 14px; border-left: 1px solid var(--line); margin: 2px 0 2px 22px; }
+.nav-group-body .nav-item { padding: 8px 12px; font-size: 13.5px; }
 .workspace { min-width: 0; }
 .header { height: 76px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
 .header p { margin: 0 0 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -134,19 +146,22 @@ td:nth-child(2) { white-space: normal; min-width: 220px; }
 
 @media (max-width: 1024px) {
   .app-shell { grid-template-columns: 78px 1fr; }
-  .brand span, .sidebar a span { display: none; }
+  .brand-text, .nav-group-head span:not(.chev), .nav-group-body, .nav-item span { display: none; }
+  .nav-group-head .chev { display: none; }
   .sidebar { padding: 22px 12px; }
-  .sidebar a { justify-content: center; }
+  .nav-item, .nav-group-head { justify-content: center; padding: 11px 0; }
   .kpi-grid, .grid-two { grid-template-columns: 1fr 1fr; }
   .form-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 760px) {
   .app-shell { display: block; }
-  .sidebar { position: sticky; top: 0; z-index: 3; display: flex; overflow-x: auto; gap: 12px; padding: 10px; }
-  .brand { margin: 0; min-width: 42px; }
-  .sidebar nav { display: flex; gap: 4px; }
-  .sidebar a { min-width: 44px; }
+  .sidebar { position: sticky; top: 0; z-index: 3; display: flex; overflow-x: auto; gap: 12px; padding: 10px; align-items: center; }
+  .brand { margin: 0; min-width: 42px; border-bottom: 0; padding-bottom: 0; }
+  .sidebar nav { display: flex; flex-direction: row; gap: 4px; }
+  .nav-group { flex-direction: row; }
+  .nav-item, .nav-group-head { min-width: 44px; padding: 10px 12px; }
+  .brand-text, .nav-group-body { display: none; }
   .header { padding: 14px 18px; height: auto; align-items: flex-start; }
   .header h1 { font-size: 20px; }
   main { padding: 18px; }

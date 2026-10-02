@@ -21,7 +21,7 @@ export function ReportsPage() {
   const [appliedTo, setAppliedTo] = useState('');
   const [snapshotName, setSnapshotName] = useState('');
   const [boardSearch, setBoardSearch] = useState('');
-  const [unitScope, setUnitScope] = useState<UnitScope>('ALL');
+  const [unitScope, setUnitScope] = useState<UnitScope>('CENTRAL');
 
   const filters = { importId: importId || undefined, from: appliedFrom || undefined, to: appliedTo || undefined };
   const imports = useQuery({ queryKey: ['imports-for-report'], queryFn: async () => unwrap<ImportRecord[]>(await api.get('/imports')) });

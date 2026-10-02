@@ -8,6 +8,7 @@ import { parseLocalExcel, type LocalImportResult, type ResultBoardRow } from '..
 import { filterResultBoardRows, totalsFromBoardRows, type UnitScope } from '../utils/unitScope';
 import { SignerBoardTable } from '../components/SignerBoardTable';
 import { SortHeader, type SortDir } from '../components/SortHeader';
+import { Pager } from '../components/Pager';
 
 export function ImportPage() {
   const navigate = useNavigate();
@@ -299,7 +300,9 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
 }) {
   const [sort, setSort] = useState<ResultSortState>({ key: 'stt', dir: 'asc' });
   const [internalSearch, setInternalSearch] = useState('');
-  const [internalScope, setInternalScope] = useState<UnitScope>('ALL');
+  const [internalScope, setInternalScope] = useState<UnitScope>('CENTRAL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const search = controlledSearch ?? internalSearch;
   const scope = controlledScope ?? internalScope;
   const setSearch = onSearchChange ?? setInternalSearch;
@@ -314,6 +317,13 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
     if (typeof av === 'string' && typeof bv === 'string') return av.localeCompare(bv, 'vi') * (sort.dir === 'asc' ? 1 : -1);
     return (Number(av) - Number(bv)) * (sort.dir === 'asc' ? 1 : -1);
   }), [filtered, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = sorted.slice(pageStart, pageStart + pageSize);
+
+  function resetPagination() { setPage(1); }
 
   function toggle(key: ResultSortKey) {
     setSort((current) => {
@@ -333,11 +343,11 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
         type="search"
         placeholder={`Tìm trong ${numberText(rows.length)} đơn vị`}
         value={search}
-        onChange={(event) => setSearch(event.target.value)}
+        onChange={(event) => { setSearch(event.target.value); resetPagination(); }}
         aria-label="Tìm đơn vị"
       />
-      {search && <button type="button" className="secondary" onClick={() => setSearch('')}>Xóa</button>}
-      <select value={scope} onChange={(event) => setScope(event.target.value as UnitScope)} aria-label="Lọc chi nhánh">
+      {search && <button type="button" className="secondary" onClick={() => { setSearch(''); resetPagination(); }}>Xóa</button>}
+      <select value={scope} onChange={(event) => { setScope(event.target.value as UnitScope); resetPagination(); }} aria-label="Lọc chi nhánh">
         <option value="ALL">Tất cả đơn vị</option>
         <option value="CENTRAL">Trụ sở chính</option>
         <option value="BRANCH">Chi nhánh</option>
@@ -346,8 +356,9 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
     </div>
 
     {sorted.length === 0 ? (
-      <div className="state empty-state"><strong>{search ? `Không tìm thấy đơn vị phù hợp với “${search}”` : 'Không có đơn vị nào khớp bộ lọc'}</strong></div>
+      <div className="state empty-state"><strong>{search ? `Không tìm thấy đơn vị phù hợp với "${search}"` : 'Không có đơn vị nào khớp bộ lọc'}</strong></div>
     ) : (
+      <>
       <div className="table-scroll result-board">
     <table>
       <thead>
@@ -375,8 +386,8 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
         </tr>
       </thead>
       <tbody>
-        {sorted.map((row, index) => <tr key={row.unit}>
-          <td>{index + 1}</td>
+        {pageRows.map((row, index) => <tr key={row.unit}>
+          <td>{pageStart + index + 1}</td>
           <td>{row.unit}</td>
           <MetricCells signed={row.reportSigned} total={row.reportTotal} rate={row.reportRate} />
           <MetricCells signed={row.letterSigned} total={row.letterTotal} rate={row.letterRate} />
@@ -385,9 +396,12 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
         </tr>)}
       </tbody>
     </table></div>
+      <Pager page={currentPage} pageSize={pageSize} total={sorted.length} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); resetPagination(); }} />
+      </>
     )}
   </div>;
 }
+
 
 function MetricCells({ signed, total, rate }: { signed: number; total: number; rate: number }) {
   return <>

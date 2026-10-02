@@ -6,6 +6,7 @@ import type { Signer, SignerBoardRow } from '../types/api';
 import { foldText, numberText } from '../utils/format';
 import { SignerCell } from './SignerCell';
 import { SortHeader, type SortDir } from './SortHeader';
+import { Pager } from './Pager';
 
 type SignerBoardTableProps = {
   rows: SignerBoardRow[];
@@ -16,11 +17,14 @@ type SortKey = 'stt' | 'signer' | 'signed' | 'totalDocuments' | 'signRate';
 type SortState = { key: SortKey; dir: SortDir };
 
 const DEFAULT_SORT: SortState = { key: 'stt', dir: 'asc' };
+const DEFAULT_PAGE_SIZE = 25;
 
 export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const signers = useQuery({
     queryKey: ['signers'],
@@ -33,7 +37,8 @@ export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
     [signers.data]
   );
 
-
+  // Match by fullName (display name from documents), not username, and fold
+  // diacritics so 'Nguyễn' and 'Nguyen' compare equal.
   const allowedSigners = useMemo(() => {
     if (!position) return null;
     return new Set(
@@ -72,7 +77,13 @@ export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
     return [...filteredRows].sort(compare);
   }, [filteredRows, sort]);
 
-  const visible = limit ? sortedRows.slice(0, limit) : sortedRows;
+  // Reset to page 1 whenever filter/scope narrows the result set.
+  const total = limit ? Math.min(sortedRows.length, limit) : sortedRows.length;
+  const safePageSize = Math.min(pageSize, Math.max(total, 1));
+  const totalPages = Math.max(1, Math.ceil(total / safePageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pageStart = (currentPage - 1) * safePageSize;
+  const paginatedRows = sortedRows.slice(pageStart, limit ? Math.min(pageStart + safePageSize, limit) : pageStart + safePageSize);
 
   function toggleSort(key: SortKey) {
     setSort((current) => {
@@ -83,6 +94,8 @@ export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
       return { key, dir: isNumeric ? 'desc' : 'asc' };
     });
   }
+
+  function resetPagination() { setPage(1); }
 
   if (rows.length === 0) {
     return <div className="state empty-state"><strong>Chưa có dữ liệu người ký chính trong phạm vi đã chọn</strong></div>;
@@ -96,47 +109,50 @@ export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
           type="search"
           placeholder={`Tìm trong ${numberText(rows.length)} người ký`}
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => { setSearch(event.target.value); resetPagination(); }}
           aria-label="Tìm người ký chính"
         />
-        <select value={position} onChange={(event) => setPosition(event.target.value)} aria-label="Lọc theo chức danh người ký">
+        <select value={position} onChange={(event) => { setPosition(event.target.value); resetPagination(); }} aria-label="Lọc theo chức danh người ký">
           <option value="">Tất cả người ký</option>
           {positions.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        {(search || position) && <button type="button" className="secondary" onClick={() => { setSearch(''); setPosition(''); }}>Xóa</button>}
-        <span className="muted">{numberText(visible.length)}/{numberText(rows.length)} người ký</span>
+        {(search || position) && <button type="button" className="secondary" onClick={() => { setSearch(''); setPosition(''); resetPagination(); }}>Xóa</button>}
+        <span className="muted">{numberText(total)}/{numberText(rows.length)} người ký</span>
       </div>
 
-      {visible.length === 0 ? (
+      {total === 0 ? (
         <div className="state empty-state"><strong>Không tìm thấy người ký phù hợp với bộ lọc đang chọn</strong></div>
       ) : (
-        <div className="table-scroll result-board">
-          <table>
-            <thead>
-              <tr>
-                <th rowSpan={2}><SortHeader label="STT" active={sort.key === 'stt'} dir={sort.dir} onClick={() => toggleSort('stt')} align="center" /></th>
-                <th rowSpan={2}><SortHeader label="Người ký chính" active={sort.key === 'signer'} dir={sort.dir} onClick={() => toggleSort('signer')} align="left" /></th>
-                <th colSpan={3}>Văn bản</th>
-              </tr>
-              <tr>
-                <th><SortHeader label="Đã ký số" active={sort.key === 'signed'} dir={sort.dir} onClick={() => toggleSort('signed')} align="center" /></th>
-                <th><SortHeader label="Tổng" active={sort.key === 'totalDocuments'} dir={sort.dir} onClick={() => toggleSort('totalDocuments')} align="center" /></th>
-                <th><SortHeader label="Tỷ lệ" active={sort.key === 'signRate'} dir={sort.dir} onClick={() => toggleSort('signRate')} align="center" /></th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((row, index) => (
-                <tr key={row.signer}>
-                  <td>{index + 1}</td>
-                  <td className="signer-name-cell"><SignerCell name={row.signer} /></td>
-                  <td>{numberText(row.signed)}</td>
-                  <td>{numberText(row.totalDocuments)}</td>
-                  <td>{row.signRate}%</td>
+        <>
+          <div className="table-scroll result-board">
+            <table>
+              <thead>
+                <tr>
+                  <th rowSpan={2}><SortHeader label="STT" active={sort.key === 'stt'} dir={sort.dir} onClick={() => toggleSort('stt')} align="center" /></th>
+                  <th rowSpan={2}><SortHeader label="Người ký chính" active={sort.key === 'signer'} dir={sort.dir} onClick={() => toggleSort('signer')} align="left" /></th>
+                  <th colSpan={3}>Văn bản</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                <tr>
+                  <th><SortHeader label="Đã ký số" active={sort.key === 'signed'} dir={sort.dir} onClick={() => toggleSort('signed')} align="center" /></th>
+                  <th><SortHeader label="Tổng" active={sort.key === 'totalDocuments'} dir={sort.dir} onClick={() => toggleSort('totalDocuments')} align="center" /></th>
+                  <th><SortHeader label="Tỷ lệ" active={sort.key === 'signRate'} dir={sort.dir} onClick={() => toggleSort('signRate')} align="center" /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedRows.map((row, index) => (
+                  <tr key={row.signer}>
+                    <td>{pageStart + index + 1}</td>
+                    <td className="signer-name-cell"><SignerCell name={row.signer} /></td>
+                    <td>{numberText(row.signed)}</td>
+                    <td>{numberText(row.totalDocuments)}</td>
+                    <td>{row.signRate}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager page={currentPage} pageSize={safePageSize} total={total} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); resetPagination(); }} />
+        </>
       )}
     </div>
   );
