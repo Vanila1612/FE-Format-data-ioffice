@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { api, unwrap } from '../services/api';
 import type { Signer, SignerBoardRow } from '../types/api';
-import { numberText } from '../utils/format';
+import { foldText, numberText } from '../utils/format';
 import { SignerCell } from './SignerCell';
 import { SortHeader, type SortDir } from './SortHeader';
 
@@ -33,16 +33,21 @@ export function SignerBoardTable({ rows, limit }: SignerBoardTableProps) {
     [signers.data]
   );
 
+
   const allowedSigners = useMemo(() => {
     if (!position) return null;
-    return new Set((signers.data || []).filter((signer) => signer.position === position).map((signer) => signer.username.toLowerCase()));
+    return new Set(
+      (signers.data || [])
+        .filter((signer) => signer.position === position)
+        .map((signer) => foldText(signer.fullName))
+    );
   }, [signers.data, position]);
 
   const filteredRows = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = foldText(search);
     return rows.filter((row) => {
-      if (needle && !row.signer.toLowerCase().includes(needle)) return false;
-      if (allowedSigners && !allowedSigners.has(row.signer.trim().toLowerCase())) return false;
+      if (needle && !foldText(row.signer).includes(needle)) return false;
+      if (allowedSigners && !allowedSigners.has(foldText(row.signer))) return false;
       return true;
     });
   }, [rows, search, allowedSigners]);

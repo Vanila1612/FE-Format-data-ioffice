@@ -13,3 +13,14 @@ export function numberText(value: number | undefined) {
 export function dateText(value?: string | null) {
   return value ? new Intl.DateTimeFormat('vi-VN').format(new Date(value)) : '-';
 }
+
+// NFD + strip combining marks so 'Nguyễn' and 'Nguyen' compare equal.
+// Collapses whitespace so accidental double spaces from import don't break the match.
+export function foldText(value: string | null | undefined): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
