@@ -36,7 +36,12 @@ export function UsersPage() {
   const update = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<User> & { password?: string } }) =>
       unwrap<User>(await api.put(`/users/${id}`, data)),
-    onSuccess: refresh,
+    onSuccess: async (_data, variables) => {
+      if (variables.data.password) {
+        toast.success('Đặt lại mật khẩu thành công');
+      }
+      await refresh();
+    },
     onError: (error) => toast.error(error.message)
   });
   const remove = useMutation({
