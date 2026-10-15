@@ -12,13 +12,18 @@ function parseTimestamp(value?: string | null): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function cleanDisplayName(value: string): string {
+  return value.replace(/[^\p{L}\p{M}\s]/gu, '').replace(/\s+/g, ' ').trim();
+}
+
 export function UsersPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'USER' as User['role'] });
   const users = useQuery({ queryKey: ['users'], queryFn: async () => unwrap<User[]>(await api.get('/users')) });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] });
+
   const create = useMutation({
-    mutationFn: async () => unwrap<User>(await api.post('/users', form)),
+    mutationFn: async (payload: typeof form) => unwrap<User>(await api.post('/users', payload)),
     onSuccess: async () => {
       toast.success('Đã tạo tài khoản');
       setForm({ username: '', displayName: '', password: '', role: 'USER' });
@@ -49,9 +54,27 @@ export function UsersPage() {
     });
   }, [users.data]);
 
+  const isDisplayNameInvalid = Boolean(form.displayName && /[^\p{L}\p{M}\s]/u.test(form.displayName));
+
+  function handleDisplayNameBlur() {
+    const cleaned = cleanDisplayName(form.displayName);
+    if (cleaned !== form.displayName) {
+      setForm((prev) => ({ ...prev, displayName: cleaned }));
+    }
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
-    create.mutate();
+    if (isDisplayNameInvalid) {
+      toast.error('Họ tên hiển thị không được chứa số hoặc ký tự đặc biệt');
+      return;
+    }
+    const finalName = cleanDisplayName(form.displayName);
+    if (!finalName) {
+      toast.error('Họ tên hiển thị chỉ được chứa chữ cái và không được để trống');
+      return;
+    }
+    create.mutate({ ...form, displayName: finalName });
   }
 
   if (users.isLoading) return <LoadingState />;
@@ -68,12 +91,24 @@ export function UsersPage() {
             value={form.username}
             onChange={(event) => setForm({ ...form, username: event.target.value })}
           />
-          <input
-            required
-            placeholder="Họ tên hiển thị"
-            value={form.displayName}
-            onChange={(event) => setForm({ ...form, displayName: event.target.value })}
-          />
+          <div>
+            <input
+              required
+              placeholder="Họ tên hiển thị"
+              value={form.displayName}
+              onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+              onBlur={handleDisplayNameBlur}
+              style={{
+                width: '100%',
+                ...(isDisplayNameInvalid ? { borderColor: 'var(--danger)', outlineColor: 'var(--danger)' } : {})
+              }}
+            />
+            {isDisplayNameInvalid && (
+              <span style={{ color: 'var(--danger)', fontSize: 11, display: 'block', marginTop: 4, lineHeight: 1.3 }}>
+                Không chứa số hoặc ký tự đặc biệt (tự xóa khi chuyển ô)
+              </span>
+            )}
+          </div>
           <input
             required
             type="password"
@@ -89,7 +124,7 @@ export function UsersPage() {
             <option value="USER">Người dùng</option>
             <option value="ADMIN">Quản trị viên</option>
           </select>
-          <button disabled={create.isPending}>
+          <button disabled={create.isPending || isDisplayNameInvalid}>
             {create.isPending ? 'Đang tạo…' : 'Tạo tài khoản'}
           </button>
         </form>
