@@ -19,6 +19,7 @@ function cleanDisplayName(value: string): string {
 export function UsersPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'USER' as User['role'] });
+  const [passwordError, setPasswordError] = useState('');
   const users = useQuery({ queryKey: ['users'], queryFn: async () => unwrap<User[]>(await api.get('/users')) });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] });
 
@@ -27,6 +28,7 @@ export function UsersPage() {
     onSuccess: async () => {
       toast.success('Đã tạo tài khoản');
       setForm({ username: '', displayName: '', password: '', role: 'USER' });
+      setPasswordError('');
       await refresh();
     },
     onError: (error) => toast.error(error.message)
@@ -74,7 +76,12 @@ export function UsersPage() {
       toast.error('Họ tên hiển thị chỉ được chứa chữ cái và không được để trống');
       return;
     }
-    create.mutate({ ...form, displayName: finalName });
+    const cleanPassword = form.password.replace(/\s/g, '');
+    if (cleanPassword.length < 8) {
+      toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      return;
+    }
+    create.mutate({ ...form, displayName: finalName, password: cleanPassword });
   }
 
   if (users.isLoading) return <LoadingState />;
@@ -109,14 +116,45 @@ export function UsersPage() {
               </span>
             )}
           </div>
-          <input
-            required
-            type="password"
-            minLength={8}
-            placeholder="Mật khẩu (ít nhất 8 ký tự)"
-            value={form.password}
-            onChange={(event) => setForm({ ...form, password: event.target.value })}
-          />
+          <div>
+            <input
+              required
+              type="password"
+              minLength={8}
+              placeholder="Mật khẩu (ít nhất 8 ký tự)"
+              value={form.password}
+              onKeyDown={(event) => {
+                if (event.key === ' ' || event.code === 'Space') {
+                  event.preventDefault();
+                  setPasswordError('Hệ thống không cho phép nhập ký tự khoảng cách');
+                }
+              }}
+              onPaste={(event) => {
+                const pasteText = event.clipboardData.getData('text');
+                if (pasteText.includes(' ')) {
+                  setPasswordError('Hệ thống không cho phép nhập ký tự khoảng cách');
+                }
+              }}
+              onChange={(event) => {
+                const hasSpace = event.target.value.includes(' ');
+                if (hasSpace) {
+                  setPasswordError('Hệ thống không cho phép nhập ký tự khoảng cách');
+                } else if (passwordError) {
+                  setPasswordError('');
+                }
+                setForm({ ...form, password: event.target.value.replace(/\s/g, '') });
+              }}
+              style={{
+                width: '100%',
+                ...(passwordError ? { borderColor: 'var(--danger)', outlineColor: 'var(--danger)' } : {})
+              }}
+            />
+            {passwordError && (
+              <span style={{ color: 'var(--danger)', fontSize: 11, display: 'block', marginTop: 4, lineHeight: 1.3 }}>
+                {passwordError}
+              </span>
+            )}
+          </div>
           <select
             value={form.role}
             onChange={(event) => setForm({ ...form, role: event.target.value as User['role'] })}
@@ -169,8 +207,15 @@ export function UsersPage() {
                       <button
                         className="secondary"
                         onClick={() => {
-                          const password = prompt(`Mật khẩu mới cho ${user.username} (ít nhất 8 ký tự):`);
-                          if (password) update.mutate({ id: user.id, data: { password } });
+                          const rawPassword = prompt(`Mật khẩu mới cho ${user.username} (ít nhất 8 ký tự, không chứa khoảng cách):`);
+                          if (rawPassword !== null) {
+                            const password = rawPassword.replace(/\s/g, '');
+                            if (password.length < 8) {
+                              toast.error('Mật khẩu mới phải có ít nhất 8 ký tự');
+                            } else {
+                              update.mutate({ id: user.id, data: { password } });
+                            }
+                          }
                         }}
                       >
                         Đặt lại mật khẩu
