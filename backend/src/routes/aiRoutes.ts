@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { isAiEnabled } from '../config/env.js';
 import { isAssistantAvailable, streamChat, type ChatMessage } from '../services/aiAssistantService.js';
 import {
@@ -14,7 +14,7 @@ import { ok } from '../utils/apiResponse.js';
 
 export const aiRoutes = Router();
 
-aiRoutes.use(requireAuth);
+aiRoutes.use(requireAuth, requireAdmin);
 
 const chatMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),

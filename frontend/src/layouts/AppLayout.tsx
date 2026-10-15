@@ -7,11 +7,11 @@ type NavItem = { to: string; label: string; icon: any; admin?: boolean };
 type NavGroup = { id: string; label: string; icon: any; items: NavItem[] };
 
 const topNav: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: Gauge },
-  { to: '/documents', label: 'Danh sách văn bản', icon: FileSearch },
-  { to: '/import', label: 'Tải lên tài liệu', icon: UploadCloud },
+  { to: '/', label: 'Dashboard', icon: Gauge, admin: true },
+  { to: '/documents', label: 'Danh sách văn bản', icon: FileSearch, admin: true },
+  { to: '/import', label: 'Tải lên tài liệu', icon: UploadCloud, admin: true },
   { to: '/reports', label: 'Thống kê', icon: FileSpreadsheet },
-  { to: '/assistant', label: 'Trợ lý AI', icon: Sparkles }
+  //{ to: '/assistant', label: 'Trợ lý AI', icon: Sparkles, admin: true }
 ];
 
 const groups: NavGroup[] = [
@@ -30,8 +30,8 @@ const groups: NavGroup[] = [
     label: 'Thông tin chung',
     icon: Cog,
     items: [
-      { to: '/snapshots', label: 'Kết quả đã lưu', icon: ClipboardList },
-      { to: '/imports', label: 'Lịch sử nhập', icon: History },
+      { to: '/snapshots', label: 'Kết quả đã lưu', icon: ClipboardList, admin: true },
+      { to: '/imports', label: 'Lịch sử nhập', icon: History, admin: true },
       { to: '/users', label: 'Cấu hình người dùng', icon: Users, admin: true }
     ]
   }
@@ -42,7 +42,7 @@ const titles: Record<string, string> = {
   '/import': 'Nhập file Excel',
   '/documents': 'Danh sách văn bản',
   '/reports': 'Thống kê',
-  '/assistant': 'Trợ lý AI',
+//  '/assistant': 'Trợ lý AI',
   '/rules': 'Quy tắc phân loại',
   '/unit-mappings': 'Chuẩn hóa đơn vị',
   '/signers': 'Danh sách người ký chính',
@@ -90,7 +90,7 @@ export function AppLayout() {
           </div>
         </div>
         <nav>
-          {topNav.map((item) => <NavRow key={item.to} to={item.to} label={item.label} Icon={item.icon} end={item.to === '/'} />)}
+          {topNav.filter((item) => !item.admin || isAdmin).map((item) => <NavRow key={item.to} to={item.to} label={item.label} Icon={item.icon} end={item.to === '/'} />)}
           {groups.map((group) => {
             const items = group.items.filter((i) => !i.admin || isAdmin);
             if (items.length === 0) return null;

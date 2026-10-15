@@ -22,7 +22,7 @@ export function createApp() {
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
   app.use(express.json({ limit: '2mb' }));
-  app.use('/api/auth', rateLimit({ windowMs: 60_000, limit: 20 }), authRoutes);
+  app.use('/api/auth', authRoutes);
   app.use('/api/health', healthRoutes);
   app.use('/api/imports', importRoutes);
   app.use('/api/documents', documentRoutes);

@@ -242,14 +242,16 @@ export function isSignedDocument(value: unknown): boolean {
   return ['đã ký số', 'da ky so', 'signed', 'true', 'yes', '1', 'x'].some((marker) => normalized.includes(marker));
 }
 
-export function normalizeUnit(source: string, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[]): string {
+export function normalizeUnit(source: string, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[] = []): string {
   const clean = normalizeText(source);
   const key = comparisonKey(clean);
+  if (!key) return clean;
+  const match = mappings.find((mapping) => (mapping.enabled ?? true) && comparisonKey(mapping.sourceName) === key);
+  if (match) return normalizeText(match.normalizedName);
   if (/^ttt(?:\s|$)/i.test(clean) || /^ttt[._-]/i.test(clean)) return 'Trung tâm Thẻ';
   const builtIn = BUILT_IN_UNIT_MAPPINGS[key];
   if (builtIn) return builtIn;
-  const match = mappings.find((mapping) => comparisonKey(mapping.sourceName) === key);
-  return match ? normalizeText(match.normalizedName) : clean;
+  return clean;
 }
 
 export function unitSuffixFromReference(referenceNumber: string): string | null {
@@ -267,16 +269,17 @@ function canonicalNhnoSuffix(key: string): string {
  *  suffix or its suffix has no approved mapping, so the row is still counted in the report. */
 const NHNO_DEFAULT_UNIT = 'Văn phòng TSC';
 
-export function normalizeNhnoReferenceUnit(referenceNumber: string, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[]): string {
+export function normalizeNhnoReferenceUnit(referenceNumber: string, mappings: Pick<UnitMapping, 'sourceName' | 'normalizedName' | 'enabled'>[] = []): string {
   const suffix = unitSuffixFromReference(referenceNumber);
   if (!suffix) return NHNO_DEFAULT_UNIT;
   const key = comparisonKey(suffix);
+  const match = mappings.find((item) => (item.enabled ?? true) && comparisonKey(item.sourceName) === key)
+    ?? mappings.find((item) => (item.enabled ?? true) && comparisonKey(item.sourceName) === canonicalNhnoSuffix(key));
+  if (match) return normalizeText(match.normalizedName);
   if (/^ttt(?: \d+)?$/.test(key)) return 'Trung tâm Thẻ';
   const builtIn = NHNO_REFERENCE_UNIT_MAPPINGS[key] ?? NHNO_REFERENCE_UNIT_MAPPINGS[canonicalNhnoSuffix(key)];
   if (builtIn) return builtIn;
-  const mapping = mappings.find((item) => comparisonKey(item.sourceName) === key)
-    ?? mappings.find((item) => comparisonKey(item.sourceName) === canonicalNhnoSuffix(key));
-  return mapping ? normalizeText(mapping.normalizedName) : NHNO_DEFAULT_UNIT;
+  return NHNO_DEFAULT_UNIT;
 }
 
 /** Reads the "Người ký chính" column whether the workbook uses the legacy uppercase

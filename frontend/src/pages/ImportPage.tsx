@@ -1,8 +1,10 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, FileUp, RotateCcw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { api, unwrap } from '../services/api';
+import type { ClassificationRule, UnitMapping } from '../types/api';
 import { groupLabels, numberText } from '../utils/format';
 import { parseLocalExcel, type LocalImportResult, type ResultBoardRow } from '../utils/localImport';
 import { filterResultBoardRows, totalsFromBoardRows, type UnitScope } from '../utils/unitScope';
@@ -12,6 +14,7 @@ import { Pager } from '../components/Pager';
 
 export function ImportPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<LocalImportResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,6 +31,16 @@ export function ImportPage() {
   const pollingRef = useRef<number | null>(null);
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('ALL');
+
+  const unitMappingsQuery = useQuery({
+    queryKey: ['unit-mappings'],
+    queryFn: async () => unwrap<UnitMapping[]>(await api.get('/unit-mappings'))
+  });
+
+  const rulesQuery = useQuery({
+    queryKey: ['rules'],
+    queryFn: async () => unwrap<ClassificationRule[]>(await api.get('/rules'))
+  });
 
   const rows = useMemo(() => {
     const boardRows = result?.boardRows || [];
@@ -50,7 +63,27 @@ export function ImportPage() {
 
     setLoading(true);
     try {
-      const parsed = await parseLocalExcel(nextFile);
+      // Đảm bảo lấy bảng chuẩn hóa đơn vị và quy tắc mới nhất tại thời điểm upload file
+      const [mappings, rules] = await Promise.all([
+        queryClient.fetchQuery({
+          queryKey: ['unit-mappings'],
+          queryFn: async () => unwrap<UnitMapping[]>(await api.get('/unit-mappings')),
+          staleTime: 0
+        }).catch((err) => {
+          console.warn('Không thể tải unit-mappings mới nhất, dùng cache:', err);
+          return unitMappingsQuery.data || [];
+        }),
+        queryClient.fetchQuery({
+          queryKey: ['rules'],
+          queryFn: async () => unwrap<ClassificationRule[]>(await api.get('/rules')),
+          staleTime: 0
+        }).catch((err) => {
+          console.warn('Không thể tải rules mới nhất, dùng cache:', err);
+          return rulesQuery.data || [];
+        })
+      ]);
+
+      const parsed = await parseLocalExcel(nextFile, { unitMappings: mappings, rules });
       setResult(parsed);
       if (parsed.missingColumns.length) {
         toast.error(`Thiếu cột bắt buộc: ${parsed.missingColumns.join(', ')}`);

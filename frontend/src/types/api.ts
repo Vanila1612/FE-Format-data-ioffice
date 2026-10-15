@@ -94,6 +94,8 @@ export type UnitMapping = {
   sourceName: string;
   normalizedName: string;
   enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Signer = {

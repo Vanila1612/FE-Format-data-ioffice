@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { exportSnapshot } from '../services/exportService.js';
 import { compareSnapshots, createSnapshot, snapshotReport } from '../services/snapshotService.js';
 import { ok } from '../utils/apiResponse.js';
@@ -12,7 +12,7 @@ import { documentFiltersSchema, paginationSchema } from '../validators/common.js
 
 export const snapshotRoutes = Router();
 
-snapshotRoutes.use(requireAuth);
+snapshotRoutes.use(requireAuth, requireAdmin);
 
 snapshotRoutes.get('/', asyncHandler(async (_req, res) => {
   const snapshots = await prisma.snapshot.findMany({

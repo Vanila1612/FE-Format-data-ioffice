@@ -14,6 +14,22 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const isLoginRequest = error.config?.url?.includes('/auth/login');
+    const is401 = error.response?.status === 401;
+
+    if (is401 && !isLoginRequest) {
+      localStorage.removeItem('ioffice.token');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('auth:unauthorized', {
+            detail: {
+              message: 'Tài khoản không còn hiệu lực hoặc phiên đăng nhập đã hết hạn. Hệ thống tự động đăng xuất.'
+            }
+          })
+        );
+      }
+    }
+
     const payload = error.response?.data as ApiResponse<unknown> | undefined;
     const message = payload && !payload.success ? payload.error.message : error.message;
     return Promise.reject(new Error(message));

@@ -9,8 +9,11 @@ import { filterResultBoardRows, totalsFromBoardRows, type UnitScope } from '../u
 import { EmptyState, ErrorState, LoadingState } from '../components/State';
 import { ResultBoardTable } from './ImportPage';
 import { SignerBoardTable } from '../components/SignerBoardTable';
+import { useAuth } from '../services/auth';
 
 export function ReportsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const queryClient = useQueryClient();
   const [importId, setImportId] = useState('');
   // UI state (what the user has typed/picked)
@@ -88,9 +91,13 @@ export function ReportsPage() {
           <p>{appliedFrom || appliedTo ? `Lọc ngày: ${appliedFrom || 'đầu kỳ'} – ${appliedTo || 'hiện tại'}` : 'Toàn bộ dữ liệu theo phạm vi đã chọn'}</p>
         </div>
         <div className="snapshot-create">
-          <input placeholder="Tên kết quả lưu (không bắt buộc)" value={snapshotName} onChange={(event) => setSnapshotName(event.target.value)} />
           <button className="secondary" disabled={!visibleBoardRows.length} onClick={exportVisibleBoard}>Xuất bảng Excel</button>
-          <button disabled={createSnapshot.isPending || !data.totals.total} onClick={() => createSnapshot.mutate()}>{createSnapshot.isPending ? 'Đang lưu…' : 'Lưu kết quả thống kê'}</button>
+          {isAdmin && (
+            <>
+              <input placeholder="Tên kết quả lưu (không bắt buộc)" value={snapshotName} onChange={(event) => setSnapshotName(event.target.value)} />
+              <button disabled={createSnapshot.isPending || !data.totals.total} onClick={() => createSnapshot.mutate()}>{createSnapshot.isPending ? 'Đang lưu…' : 'Lưu kết quả thống kê'}</button>
+            </>
+          )}
         </div>
       </div>
       {data.boardRows.length === 0 ? <EmptyState /> : <ResultBoardTable rows={data.boardRows} search={boardSearch} onSearchChange={setBoardSearch} scope={unitScope} onScopeChange={setUnitScope} />}

@@ -47,6 +47,8 @@ userRoutes.delete('/:id', asyncHandler(async (req, res) => {
     prisma.snapshot.count({ where: { createdById: id } })
   ]);
   if (importCount || snapshotCount) throw new AppError(400, 'USER_HAS_DATA', 'Không thể xóa người dùng đã có dữ liệu hoặc kết quả đã lưu');
+  await prisma.assistantTurn.deleteMany({ where: { userId: id } });
+  await prisma.assistantSession.deleteMany({ where: { userId: id } });
   await prisma.user.delete({ where: { id } });
   return ok(res, { deleted: true });
 }));

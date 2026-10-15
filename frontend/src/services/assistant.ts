@@ -92,16 +92,28 @@ export async function streamAssistantChat(
     signal: options?.signal
   });
 
-  if (!response.ok) {
-    let message = `Yêu cầu thất bại (${response.status})`;
-    try {
-      const body = await response.json();
-      if (body && !body.success && body.error?.message) message = body.error.message;
-    } catch {
-      // ignore
+    if (!response.ok) {
+      let message = `Yêu cầu thất bại (${response.status})`;
+      try {
+        const body = await response.json();
+        if (body && !body.success && body.error?.message) message = body.error.message;
+      } catch {
+        // ignore
+      }
+      if (response.status === 401) {
+        localStorage.removeItem('ioffice.token');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('auth:unauthorized', {
+              detail: {
+                message: 'Tài khoản không còn hiệu lực hoặc phiên đăng nhập đã hết hạn. Hệ thống tự động đăng xuất.'
+              }
+            })
+          );
+        }
+      }
+      throw new Error(message);
     }
-    throw new Error(message);
-  }
 
   if (!response.body) {
     throw new Error('Trình duyệt không hỗ trợ streaming response');

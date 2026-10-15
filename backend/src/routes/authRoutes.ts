@@ -1,3 +1,4 @@
+import rateLimit from 'express-rate-limit';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
@@ -7,7 +8,21 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const authRoutes = Router();
 
-authRoutes.post('/login', asyncHandler(async (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  legacyHeaders: false,
+  standardHeaders: true,
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Quá nhiều yêu cầu đăng nhập. Vui lòng thử lại sau.'
+    }
+  }
+});
+
+authRoutes.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const body = z.object({ username: z.string().min(1), password: z.string().min(1) }).parse(req.body);
   return ok(res, await login(body.username, body.password));
 }));

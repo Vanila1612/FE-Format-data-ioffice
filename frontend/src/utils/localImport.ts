@@ -219,7 +219,32 @@ const nhnoSuffixUnitMap: Record<string, string> = {
   'qlxd': 'Ban QLDA ĐTXDKV', 'th': 'Ban QLDA ĐTXDKV', 'tcns': 'Ban Tổ chức nhân sự',
   'cskh': 'Chăm sóc khách hàng', 'rrtd': 'Trung tâm Quản lý rủi ro tín dụng', 'cd': 'Văn Phòng Công đoàn',
   'nhs': 'Ban Ngân hàng số', 'cn': 'Ban Công nghệ', 'dctc': 'Ban Định chế tài chính',
-  'ktnb': 'Ban Kiểm tra, giám sát nội bộ', 'tdtcb': 'Trường đào tạo cán bộ', 'tttm': 'Trung tâm Tài trợ Thương Mại', 'bqle3': 'Ban QLE3'
+  'ktnb': 'Ban Kiểm tra, giám sát nội bộ', 'tdtcb': 'Trường đào tạo cán bộ', 'tttm': 'Trung tâm Tài trợ Thương Mại', 'bqle3': 'Ban QLE3',
+  // Các mã NHNo phát sinh trong dữ liệu rà soát ngày 22/09/2026
+  'khcl': 'Ban Khách hàng chiến lược',
+  'tckt': 'Ban Tài chính kế toán',
+  'khdn': 'Ban Khách hàng doanh nghiệp',
+  'ktgs': 'Ban Kiểm tra, giám sát nội bộ',
+  'hdl': 'Hội đồng lương',
+  'hdms tt': 'Hội đồng lương',
+  'alco1': 'Ban quản lý tài sản và nợ',
+  'qlgs1': 'Ban quản lý tài sản và nợ',
+  'aln': 'Quản lý nợ',
+  'qln': 'Quản lý nợ',
+  'pcrt': 'Phòng chống rửa tiền',
+  'kh qlrr': 'Ban Khách hàng và Quản lý rủi ro',
+  'khqlrr': 'Ban Khách hàng và Quản lý rủi ro',
+  'ubkt': 'Ủy ban kiểm tra',
+  'cntt': 'Trung tâm Công nghệ thông tin',
+  'ttkh 2': 'Trung tâm Kiều hối',
+  'td': 'Ban Thẩm định và phê duyệt tín dụng',
+  'pdt d': 'Ban Thẩm định và phê duyệt tín dụng',
+  'tknq': 'Kiểm toán nội bộ',
+  'hcqt': 'Ban Hành chính - Quản trị',
+  'hcns': 'Ban Hành chính - Nhân sự',
+  'cksh': 'Ban Khách hàng cá nhân',
+  'kth': 'Ban Thư ký tổng hợp',
+  'fic': 'Trung tâm Tài chính'
 };
 
 const requiredHeaders = ['Trích yếu', 'Số ký hiệu', 'Văn bản ký số', 'Ngày ban hành', 'Đơn vị ban hành'];
@@ -232,13 +257,37 @@ function comparisonKey(value: string) {
   return clean(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function normalizeUnitName(value: unknown) {
+export type UnitMappingItem = {
+  id?: string;
+  sourceName: string;
+  normalizedName: string;
+  enabled?: boolean;
+};
+
+export type ClassificationRuleItem = {
+  id?: string;
+  keyword: string;
+  documentGroup: DocumentGroup;
+  priority?: number;
+  enabled?: boolean;
+};
+
+export type ParseLocalExcelOptions = {
+  unitMappings?: UnitMappingItem[];
+  rules?: ClassificationRuleItem[];
+};
+
+export function normalizeUnitName(value: unknown, mappings: UnitMappingItem[] = []): string {
   const text = clean(value);
+  const key = comparisonKey(text);
+  if (!key) return text;
+  const match = mappings.find((m) => (m.enabled ?? true) && comparisonKey(m.sourceName) === key);
+  if (match) return clean(match.normalizedName);
   if (/^ttt(?:\s|$)/i.test(text) || /^ttt[._-]/i.test(text)) return 'Trung tâm Thẻ';
-  const required = requiredUnitMap[comparisonKey(text)];
+  const required = requiredUnitMap[key];
   if (required) return required;
-  const key = text.toLowerCase();
-  return unitNameMap[key] || text;
+  const lowerKey = text.toLowerCase();
+  return unitNameMap[lowerKey] || text;
 }
 
 function headerKey(value: unknown) {
@@ -281,24 +330,52 @@ function isNhnoUnit(unit: string) {
   return ['nhno', 'nhno lh', 'ngan hang nong nghiep va phat trien nong thon viet nam'].includes(key);
 }
 
-function normalizeNhnoSuffix(referenceNumber: string) {
-  const parts = clean(referenceNumber).split('-').map(clean).filter(Boolean);
-  const suffix = parts.length > 1 ? parts.at(-1) || '' : '';
-  const key = comparisonKey(suffix);
-  if (/^ttt(?: \d+)?$/.test(key)) return 'Trung tâm Thẻ';
-  return nhnoSuffixUnitMap[key] || '';
+function canonicalNhnoSuffix(key: string): string {
+  return key.replace(/[.\d]+$/, '');
 }
 
-function classify(referenceNumber: string, issuingUnit: string): { group: DocumentGroup; normalizedUnit?: string } {
+const NHNO_DEFAULT_UNIT = 'Văn phòng TSC';
+
+export function normalizeNhnoSuffix(referenceNumber: string, mappings: UnitMappingItem[] = []): string {
+  const parts = clean(referenceNumber).split('-').map(clean).filter(Boolean);
+  const suffix = parts.length > 1 ? parts.at(-1) || '' : '';
+  if (!suffix) return NHNO_DEFAULT_UNIT;
+  const key = comparisonKey(suffix);
+  const match = mappings.find(
+    (item) => (item.enabled ?? true) && (comparisonKey(item.sourceName) === key || comparisonKey(item.sourceName) === canonicalNhnoSuffix(key))
+  );
+  if (match) return clean(match.normalizedName);
+  if (/^ttt(?: \d+)?$/.test(key)) return 'Trung tâm Thẻ';
+  const builtIn = nhnoSuffixUnitMap[key] ?? nhnoSuffixUnitMap[canonicalNhnoSuffix(key)];
+  if (builtIn) return builtIn;
+  return NHNO_DEFAULT_UNIT;
+}
+
+export function classify(
+  referenceNumber: string,
+  issuingUnit: string,
+  mappings: UnitMappingItem[] = [],
+  rules: ClassificationRuleItem[] = []
+): { group: DocumentGroup; normalizedUnit?: string } {
   if (isNhnoUnit(issuingUnit)) {
-    return { group: 'LETTER_AUTHORIZATION', normalizedUnit: normalizeNhnoSuffix(referenceNumber) };
+    return { group: 'LETTER_AUTHORIZATION', normalizedUnit: normalizeNhnoSuffix(referenceNumber, mappings) };
+  }
+  if (rules.length > 0) {
+    const sorted = [...rules]
+      .filter((r) => r.enabled ?? true)
+      .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.keyword.localeCompare(b.keyword, 'vi'));
+    const matched = sorted.find((r) => hasToken(referenceNumber, r.keyword));
+    if (matched) return { group: matched.documentGroup };
+    return { group: 'WORK_LETTER' };
   }
   if (hasToken(referenceNumber, 'BC') || hasToken(referenceNumber, 'TTr')) return { group: 'REPORT_PROPOSAL' };
   if (hasToken(referenceNumber, 'CV') || hasToken(referenceNumber, 'UQ')) return { group: 'LETTER_AUTHORIZATION' };
   return { group: 'WORK_LETTER' };
 }
 
-export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
+export async function parseLocalExcel(file: File, options?: ParseLocalExcelOptions): Promise<LocalImportResult> {
+  const mappings = options?.unitMappings ?? [];
+  const rules = options?.rules ?? [];
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
   const sheetName = workbook.SheetNames[0];
@@ -330,7 +407,7 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
       const signedDocument = clean(rawData['Văn bản ký số']);
       const signerName = clean(rawData['Người ký chính'] ?? rawData['NGUOI_KY_CHINH'] ?? '');
       const issuingUnit = clean(rawData['Đơn vị ban hành']);
-      const classified = classify(referenceNumber, issuingUnit);
+      const classified = classify(referenceNumber, issuingUnit, mappings, rules);
       return {
         stt: index + 1,
         summary,
@@ -339,16 +416,15 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
         signerName,
         issueDate: formatExcelDate(rawData['Ngày ban hành']),
         issuingUnit,
-        normalizedUnit: classified.normalizedUnit ?? normalizeUnitName(issuingUnit),
+        normalizedUnit: classified.normalizedUnit || normalizeUnitName(issuingUnit, mappings),
         documentGroup: classified.group,
         rawData
       };
     });
 
-  const reportableDocuments = documents.filter((document) => document.normalizedUnit || !isNhnoUnit(document.issuingUnit));
-  const signed = reportableDocuments.filter((document) => isSigned(document.signedDocument)).length;
-  const total = reportableDocuments.length;
-  const dates = reportableDocuments.map((document) => document.issueDate).filter(Boolean).sort();
+  const signed = documents.filter((document) => isSigned(document.signedDocument)).length;
+  const total = documents.length;
+  const dates = documents.map((document) => document.issueDate).filter(Boolean).sort();
   return {
     documents,
     missingColumns: [],
@@ -362,8 +438,8 @@ export async function parseLocalExcel(file: File): Promise<LocalImportResult> {
       from: dates[0] || '',
       to: dates.at(-1) || ''
     },
-    boardRows: buildResultBoard(reportableDocuments),
-    signerBoardRows: buildSignerBoard(reportableDocuments)
+    boardRows: buildResultBoard(documents),
+    signerBoardRows: buildSignerBoard(documents)
   };
 }
 

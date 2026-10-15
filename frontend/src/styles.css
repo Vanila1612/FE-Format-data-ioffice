@@ -112,7 +112,7 @@ td:nth-child(2) { white-space: normal; min-width: 220px; }
 .signer-search { display: flex; align-items: center; gap: 8px; }
 .signer-search input { flex: 1; min-width: 0; }
 .signer-search .muted { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.pager { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 14px; color: var(--muted); }
+.pager { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 14px; color: var(--muted); flex-wrap: wrap; }
 .pager button { background: #eef3f4; color: #17201c; }
 .pager button.current-page { background: var(--primary); color: #fff; }
 .pager label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }

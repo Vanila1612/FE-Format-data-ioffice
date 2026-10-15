@@ -9,7 +9,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('admin123456');
   const [loading, setLoading] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={user.role === 'ADMIN' ? '/' : '/reports'} replace />;
 
   async function submit(event: FormEvent) {
     event.preventDefault();

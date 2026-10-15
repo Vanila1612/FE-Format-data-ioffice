@@ -23,12 +23,12 @@ importRoutes.use(requireAuth);
 
 // --- Cụ thể trước, chung chung sau để tránh 404 khi path chứa sub-segment ---
 
-importRoutes.post('/preview', upload.single('file'), asyncHandler(async (req, res) => {
+importRoutes.post('/preview', requireAdmin, upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError(400, 'FILE_REQUIRED', 'Excel file is required');
   return ok(res, await previewImport(req.file));
 }));
 
-importRoutes.post('/', upload.single('file'), asyncHandler(async (req, res) => {
+importRoutes.post('/', requireAdmin, upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError(400, 'FILE_REQUIRED', 'Excel file is required');
   const result = await enqueueImport(req.file, req.user!.id);
   res.setHeader('Location', `/api/imports/${result.import.id}/status`);

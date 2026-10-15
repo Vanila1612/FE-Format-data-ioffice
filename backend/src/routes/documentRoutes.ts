@@ -10,7 +10,7 @@ import { paginationSchema } from '../validators/common.js';
 
 export const documentRoutes = Router();
 
-documentRoutes.use(requireAuth);
+documentRoutes.use(requireAuth, requireAdmin);
 
 documentRoutes.get('/', asyncHandler(async (req, res) => {
   const query = paginationSchema.parse(req.query);

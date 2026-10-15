@@ -3,9 +3,12 @@ import dotenv from 'dotenv';
 
 // Load env from project root regardless of cwd so REDIS_URL/JWT_SECRET/etc.
 // are available in production containers where CWD != repo root.
-for (const candidate of ['.env.prod', '.env']) {
-  const filePath = path.resolve(process.cwd(), '..', candidate);
-  dotenv.config({ path: filePath });
+// In development, prefer .env; in production, load .env.prod first.
+const isProd = process.env.NODE_ENV === 'production';
+const candidates = isProd ? ['.env.prod', '.env'] : ['.env'];
+for (const candidate of candidates) {
+  dotenv.config({ path: path.resolve(process.cwd(), '..', candidate) });
+  dotenv.config({ path: path.resolve(process.cwd(), candidate) });
 }
 
 const { env } = await import('./config/env.js');

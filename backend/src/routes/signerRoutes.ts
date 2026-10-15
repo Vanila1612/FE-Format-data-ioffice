@@ -36,15 +36,46 @@ signerRoutes.get('/', asyncHandler(async (req, res) => {
 
 signerRoutes.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const body = signerSchema.parse(req.body);
-  if (await prisma.signer.findUnique({ where: { username: body.username } })) throw new AppError(409, 'SIGNER_EXISTS', 'Signer username already exists');
-  return ok(res, await prisma.signer.create({ data: body }), 201);
+  const exists = await prisma.signer.findFirst({
+    where: { username: { equals: body.username, mode: 'insensitive' } }
+  });
+  if (exists) throw new AppError(409, 'SIGNER_EXISTS', 'Tên đăng nhập đã tồn tại');
+  try {
+    return ok(res, await prisma.signer.create({ data: body }), 201);
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      throw new AppError(409, 'SIGNER_EXISTS', 'Tên đăng nhập đã tồn tại');
+    }
+    throw err;
+  }
 }));
 
 signerRoutes.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const body = signerSchema.partial().parse(req.body);
   const id = param(req, 'id');
-  if (!(await prisma.signer.findUnique({ where: { id } }))) throw new AppError(404, 'SIGNER_NOT_FOUND', 'Signer not found');
-  return ok(res, await prisma.signer.update({ where: { id }, data: body }));
+  const existing = await prisma.signer.findUnique({ where: { id } });
+  if (!existing) throw new AppError(404, 'SIGNER_NOT_FOUND', 'Signer not found');
+
+  if (body.username && body.username.toLowerCase() !== existing.username.toLowerCase()) {
+    const duplicate = await prisma.signer.findFirst({
+      where: {
+        username: { equals: body.username, mode: 'insensitive' },
+        id: { not: id }
+      }
+    });
+    if (duplicate) {
+      throw new AppError(409, 'SIGNER_EXISTS', 'Tên đăng nhập đã tồn tại');
+    }
+  }
+
+  try {
+    return ok(res, await prisma.signer.update({ where: { id }, data: body }));
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      throw new AppError(409, 'SIGNER_EXISTS', 'Tên đăng nhập đã tồn tại');
+    }
+    throw err;
+  }
 }));
 
 signerRoutes.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {

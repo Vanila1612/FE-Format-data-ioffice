@@ -79,10 +79,35 @@ describe('normalizationService', () => {
     expect(documentDedupeKey('01/CV-ABC', date, 'Ban Kiểm soát')).not.toBe(documentDedupeKey('02/CV-ABC', date, 'Ban Kiểm soát'));
   });
 
-  it('maps approved NHNo reference suffixes and excludes unknown suffixes', () => {
+  it('maps approved NHNo reference suffixes and falls back to default unit for unknown suffixes', () => {
     const emptyMappings: never[] = [];
     expect(normalizeNhnoReferenceUnit('12969/NHNo-ALCO', emptyMappings)).toBe('Trung tâm quản lý nợ có vấn đề');
     expect(normalizeNhnoReferenceUnit('1/NHNo-TTT.12', emptyMappings)).toBe('Trung tâm Thẻ');
-    expect(normalizeNhnoReferenceUnit('1073', emptyMappings)).toBeNull();
+    expect(normalizeNhnoReferenceUnit('1073', emptyMappings)).toBe('Văn phòng TSC');
+  });
+
+  it('prioritizes user-configured unit mappings and matches accent/case insensitively', () => {
+    const mappings = [
+      { sourceName: 'Agribank Chi nhanh Can Gio', normalizedName: 'Agribank Chi nhánh Cần Giờ nè', enabled: true },
+      { sourceName: 'BAN KIỂM SOÁT', normalizedName: 'Ban Kiểm soát Agribank Mới', enabled: true },
+      { sourceName: 'Đơn vị tắt', normalizedName: 'Tên chuẩn', enabled: false }
+    ];
+
+    // Khớp không dấu / có dấu
+    expect(normalizeUnit('Agribank Chi nhanh Can Gio', mappings)).toBe('Agribank Chi nhánh Cần Giờ nè');
+    expect(normalizeUnit('Agribank Chi nhánh Cần Giờ', mappings)).toBe('Agribank Chi nhánh Cần Giờ nè');
+    expect(normalizeUnit('agribank chi nhanh can gio', mappings)).toBe('Agribank Chi nhánh Cần Giờ nè');
+
+    // Ưu tiên mapping của người dùng hơn built-in mapping
+    expect(normalizeUnit('BAN KIỂM SOÁT', mappings)).toBe('Ban Kiểm soát Agribank Mới');
+
+    // Bỏ qua mapping bị vô hiệu hóa (enabled: false)
+    expect(normalizeUnit('Đơn vị tắt', mappings)).toBe('Đơn vị tắt');
+
+    // Ưu tiên mapping cấu hình cho NHNo reference suffix
+    const nhnoMappings = [
+      { sourceName: 'CUSTOM_ALCO', normalizedName: 'Ban ALCO Tùy Biến', enabled: true }
+    ];
+    expect(normalizeNhnoReferenceUnit('123/NHNo-CUSTOM_ALCO', nhnoMappings)).toBe('Ban ALCO Tùy Biến');
   });
 });

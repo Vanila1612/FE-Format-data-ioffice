@@ -2,8 +2,12 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 
 // Match docker-compose cwd (/app/backend). Repo root is one level up.
-for (const candidate of ['.env.prod', '.env']) {
+// In development, prefer .env; in production, load .env.prod first.
+const isProd = process.env.NODE_ENV === 'production';
+const candidates = isProd ? ['.env.prod', '.env'] : ['.env'];
+for (const candidate of candidates) {
   dotenv.config({ path: path.resolve(process.cwd(), '..', candidate) });
+  dotenv.config({ path: path.resolve(process.cwd(), candidate) });
 }
 
 const { startImportWorker, stopImportWorker } = await import('../src/jobs/importProcessor.js');

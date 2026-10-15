@@ -5,6 +5,7 @@ import { api, unwrap } from '../services/api';
 import type { User } from '../types/api';
 import { dateText } from '../utils/format';
 import { EmptyState, ErrorState, LoadingState } from '../components/State';
+import { Pager } from '../components/Pager';
 
 function parseTimestamp(value?: string | null): number {
   if (!value) return 0;
@@ -20,6 +21,8 @@ export function UsersPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'USER' as User['role'] });
   const [passwordError, setPasswordError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const users = useQuery({ queryKey: ['users'], queryFn: async () => unwrap<User[]>(await api.get('/users')) });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] });
 
