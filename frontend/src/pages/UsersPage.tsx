@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, unwrap } from '../services/api';
@@ -6,21 +6,242 @@ import type { User } from '../types/api';
 import { dateText } from '../utils/format';
 import { EmptyState, ErrorState, LoadingState } from '../components/State';
 
-const roleLabel = { ADMIN: 'Quản trị viên', USER: 'Người dùng' } as const;
+function parseTimestamp(value?: string | null): number {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function cleanDisplayName(value: string): string {
+  return value.replace(/[^\p{L}\p{M}\s]/gu, '').replace(/\s+/g, ' ').trim();
+}
 
 export function UsersPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ username: '', displayName: '', password: '', role: 'USER' as User['role'] });
+  const [passwordError, setPasswordError] = useState('');
   const users = useQuery({ queryKey: ['users'], queryFn: async () => unwrap<User[]>(await api.get('/users')) });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['users'] });
-  const create = useMutation({ mutationFn: async () => unwrap<User>(await api.post('/users', form)), onSuccess: async () => { toast.success('Đã tạo tài khoản'); setForm({ username: '', displayName: '', password: '', role: 'USER' }); await refresh(); }, onError: (error) => toast.error(error.message) });
-  const update = useMutation({ mutationFn: async ({ id, data }: { id: string; data: Partial<User> & { password?: string } }) => unwrap<User>(await api.put(`/users/${id}`, data)), onSuccess: refresh, onError: (error) => toast.error(error.message) });
-  const remove = useMutation({ mutationFn: async (id: string) => unwrap(await api.delete(`/users/${id}`)), onSuccess: async () => { toast.success('Đã xóa tài khoản'); await refresh(); }, onError: (error) => toast.error(error.message) });
-  function submit(event: FormEvent) { event.preventDefault(); create.mutate(); }
+
+  const create = useMutation({
+    mutationFn: async (payload: typeof form) => unwrap<User>(await api.post('/users', payload)),
+    onSuccess: async () => {
+      toast.success('Đã tạo tài khoản');
+      setForm({ username: '', displayName: '', password: '', role: 'USER' });
+      setPasswordError('');
+      await refresh();
+    },
+    onError: (error) => toast.error(error.message)
+  });
+  const update = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<User> & { password?: string } }) =>
+      unwrap<User>(await api.put(`/users/${id}`, data)),
+    onSuccess: async (_data, variables) => {
+      if (variables.data.password) {
+        toast.success('Đặt lại mật khẩu thành công');
+      }
+      await refresh();
+    },
+    onError: (error) => toast.error(error.message)
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) => unwrap(await api.delete(`/users/${id}`)),
+    onSuccess: async () => {
+      toast.success('Đã xóa tài khoản');
+      await refresh();
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const sortedUsers = useMemo(() => {
+    return [...(users.data || [])].sort((a, b) => {
+      const timeA = parseTimestamp(a.updatedAt) || parseTimestamp(a.createdAt);
+      const timeB = parseTimestamp(b.updatedAt) || parseTimestamp(b.createdAt);
+      return timeB - timeA;
+    });
+  }, [users.data]);
+
+  const isDisplayNameInvalid = Boolean(form.displayName && /[^\p{L}\p{M}\s]/u.test(form.displayName));
+
+  function handleDisplayNameBlur() {
+    const cleaned = cleanDisplayName(form.displayName);
+    if (cleaned !== form.displayName) {
+      setForm((prev) => ({ ...prev, displayName: cleaned }));
+    }
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (isDisplayNameInvalid) {
+      toast.error('Họ tên hiển thị không được chứa số hoặc ký tự đặc biệt');
+      return;
+    }
+    const finalName = cleanDisplayName(form.displayName);
+    if (!finalName) {
+      toast.error('Họ tên hiển thị chỉ được chứa chữ cái và không được để trống');
+      return;
+    }
+    const cleanPassword = form.password.replace(/\s/g, '');
+    if (cleanPassword.length < 8) {
+      toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      return;
+    }
+    create.mutate({ ...form, displayName: finalName, password: cleanPassword });
+  }
+
   if (users.isLoading) return <LoadingState />;
   if (users.isError) return <ErrorState message={users.error.message} retry={() => users.refetch()} />;
-  return <section className="page-stack">
-    <div className="panel"><h2>Tạo tài khoản</h2><form className="form-grid" onSubmit={submit}><input required placeholder="Tên đăng nhập" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} /><input required placeholder="Họ tên hiển thị" value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} /><input required type="password" minLength={8} placeholder="Mật khẩu (ít nhất 8 ký tự)" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /><select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as User['role'] })}><option value="USER">Người dùng</option><option value="ADMIN">Quản trị viên</option></select><button disabled={create.isPending}>{create.isPending ? 'Đang tạo…' : 'Tạo tài khoản'}</button></form></div>
-    <div className="panel"><h2>Phân quyền tài khoản</h2>{users.data!.length === 0 ? <EmptyState /> : <div className="table-scroll"><table><thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Quyền</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead><tbody>{users.data!.map((user) => <tr key={user.id}><td>{user.username}</td><td>{user.displayName}</td><td><select value={user.role} onChange={(event) => update.mutate({ id: user.id, data: { role: event.target.value as User['role'] } })}><option value="USER">Người dùng</option><option value="ADMIN">Quản trị viên</option></select></td><td>{user.createdAt ? dateText(user.createdAt) : '—'}</td><td><button className="secondary" onClick={() => { const password = prompt(`Mật khẩu mới cho ${user.username} (ít nhất 8 ký tự):`); if (password) update.mutate({ id: user.id, data: { password } }); }}>Đặt lại mật khẩu</button><button className="danger" onClick={() => confirm(`Xóa tài khoản ${user.username}?`) && remove.mutate(user.id)}>Xóa</button></td></tr>)}</tbody></table></div>}<p className="help-text">Quản trị viên được quản lý tài khoản, dữ liệu, quy tắc và đơn vị chuẩn hóa. Người dùng được nhập, xem văn bản, tạo thống kê và lưu kết quả.</p></div>
-  </section>;
+
+  return (
+    <section className="page-stack">
+      <div className="panel">
+        <h2>Tạo tài khoản</h2>
+        <form className="form-grid" onSubmit={submit}>
+          <input
+            required
+            placeholder="Tên đăng nhập"
+            value={form.username}
+            onChange={(event) => setForm({ ...form, username: event.target.value })}
+          />
+          <div>
+            <input
+              required
+              placeholder="Họ tên hiển thị"
+              value={form.displayName}
+              onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+              onBlur={handleDisplayNameBlur}
+              style={{
+                width: '100%',
+                ...(isDisplayNameInvalid ? { borderColor: 'var(--danger)', outlineColor: 'var(--danger)' } : {})
+              }}
+            />
+            {isDisplayNameInvalid && (
+              <span style={{ color: 'var(--danger)', fontSize: 11, display: 'block', marginTop: 4, lineHeight: 1.3 }}>
+                Không chứa số hoặc ký tự đặc biệt (tự xóa khi chuyển ô)
+              </span>
+            )}
+          </div>
+          <div>
+            <input
+              required
+              type="password"
+              minLength={8}
+              placeholder="Mật khẩu (ít nhất 8 ký tự)"
+              value={form.password}
+              onKeyDown={(event) => {
+                if (event.key === ' ' || event.code === 'Space') {
+                  event.preventDefault();
+                  setPasswordError('Hệ thống không cho phép nhập ký tự khoảng cách');
+                }
+              }}
+              onPaste={(event) => {
+                const pasteText = event.clipboardData.getData('text');
+                if (pasteText.includes(' ')) {
+                  setPasswordError('Hệ thống không cho phép nhập ký tự khoảng cách');
+                }
+              }}
+              onChange={(event) => {
+                const hasSpace = event.target.value.includes(' ');
+                if (hasSpace) {
+                  setPasswordError('Hệ thống không cho phép nhập ký tự khoảng cách');
+                } else if (passwordError) {
+                  setPasswordError('');
+                }
+                setForm({ ...form, password: event.target.value.replace(/\s/g, '') });
+              }}
+              style={{
+                width: '100%',
+                ...(passwordError ? { borderColor: 'var(--danger)', outlineColor: 'var(--danger)' } : {})
+              }}
+            />
+            {passwordError && (
+              <span style={{ color: 'var(--danger)', fontSize: 11, display: 'block', marginTop: 4, lineHeight: 1.3 }}>
+                {passwordError}
+              </span>
+            )}
+          </div>
+          <select
+            value={form.role}
+            onChange={(event) => setForm({ ...form, role: event.target.value as User['role'] })}
+          >
+            <option value="USER">Người dùng</option>
+            <option value="ADMIN">Quản trị viên</option>
+          </select>
+          <button disabled={create.isPending || isDisplayNameInvalid}>
+            {create.isPending ? 'Đang tạo…' : 'Tạo tài khoản'}
+          </button>
+        </form>
+      </div>
+
+      <div className="panel">
+        <h2>Phân quyền tài khoản</h2>
+        {sortedUsers.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tên đăng nhập</th>
+                  <th>Họ tên</th>
+                  <th>Quyền</th>
+                  <th>Ngày tạo</th>
+                  <th>Ngày cập nhật</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td>{user.username}</td>
+                    <td>{user.displayName}</td>
+                    <td>
+                      <select
+                        value={user.role}
+                        onChange={(event) =>
+                          update.mutate({ id: user.id, data: { role: event.target.value as User['role'] } })
+                        }
+                      >
+                        <option value="USER">Người dùng</option>
+                        <option value="ADMIN">Quản trị viên</option>
+                      </select>
+                    </td>
+                    <td>{user.createdAt ? dateText(user.createdAt) : '—'}</td>
+                    <td>{user.updatedAt ? dateText(user.updatedAt) : '—'}</td>
+                    <td>
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          const rawPassword = prompt(`Mật khẩu mới cho ${user.username} (ít nhất 8 ký tự, không chứa khoảng cách):`);
+                          if (rawPassword !== null) {
+                            const password = rawPassword.replace(/\s/g, '');
+                            if (password.length < 8) {
+                              toast.error('Mật khẩu mới phải có ít nhất 8 ký tự');
+                            } else {
+                              update.mutate({ id: user.id, data: { password } });
+                            }
+                          }
+                        }}
+                      >
+                        Đặt lại mật khẩu
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => confirm(`Xóa tài khoản ${user.username}?`) && remove.mutate(user.id)}
+                      >
+                        Xóa
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="help-text">
+          Quản trị viên được quản lý tài khoản, dữ liệu, quy tắc và đơn vị chuẩn hóa. Người dùng được nhập, xem văn bản, tạo thống kê và lưu kết quả.
+        </p>
+      </div>
+    </section>
+  );
 }
