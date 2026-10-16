@@ -21,6 +21,34 @@ test('lọc đơn vị hỗ trợ tìm kiếm không dấu', () => {
   expect(filterResultBoardRows(rows, '', 'BRANCH').map((row) => row.unit)).toEqual(['Chi nhánh Sở Giao dịch']);
 });
 
+test('lọc 5 đơn vị Trụ sở chính ký số nhiều nhất và không chứa chi nhánh', () => {
+  const units = [
+    { unit: 'PerfTest', total: 7631, signed: 0 },
+    { unit: 'Văn phòng TSC', total: 5677, signed: 951 },
+    { unit: 'Chi nhánh Sở Giao dịch', total: 3831, signed: 0 },
+    { unit: 'Ban Khách hàng cá nhân', total: 2823, signed: 392 },
+    { unit: 'Agribank chi nhánh Thái Bình', total: 2541, signed: 56 },
+    { unit: 'Trung tâm quản lý dữ liệu', total: 2467, signed: 612 },
+    { unit: 'Ban Pháp Chế', total: 2296, signed: 743 },
+    { unit: 'Ban Khách hàng Doanh nghiệp', total: 2073, signed: 1353 },
+    { unit: 'Trung tâm Công nghệ thông tin', total: 1590, signed: 646 }
+  ];
+
+  const top5Central = units
+    .filter((row) => !isBranchUnit(row.unit))
+    .sort((a, b) => b.signed - a.signed)
+    .slice(0, 5);
+
+  expect(top5Central.map((u) => u.unit)).toEqual([
+    'Ban Khách hàng Doanh nghiệp',
+    'Văn phòng TSC',
+    'Ban Pháp Chế',
+    'Trung tâm Công nghệ thông tin',
+    'Trung tâm quản lý dữ liệu'
+  ]);
+  expect(top5Central.map((u) => u.signed)).toEqual([1353, 951, 743, 646, 612]);
+});
+
 function boardRow(unit: string) {
   return {
     stt: 1,

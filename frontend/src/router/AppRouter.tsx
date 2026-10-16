@@ -25,21 +25,20 @@ function Protected() {
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <LoadingState />;
-  if (user?.role !== 'ADMIN') return <Navigate to="/reports" replace />;
+  if (user?.role !== 'ADMIN') return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 function IndexRoute() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   if (loading) return <LoadingState />;
-  if (user?.role !== 'ADMIN') return <Navigate to="/reports" replace />;
   return <DashboardPage />;
 }
 
 function CatchAllRoute() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   if (loading) return <LoadingState />;
-  return <Navigate to={user?.role === 'ADMIN' ? '/' : '/reports'} replace />;
+  return <Navigate to="/" replace />;
 }
 
 export function AppRouter() {

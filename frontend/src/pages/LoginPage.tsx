@@ -27,7 +27,7 @@ export function LoginPage() {
   return <div className="login-screen">
     <form className="login-card" onSubmit={submit}>
       <p>iOffice</p>
-      <h1>Rà soát văn bản đi</h1>
+      <h1>Theo dõi ký số</h1>
       <label>Tài khoản<input value={username} onChange={(event) => setUsername(event.target.value)} /></label>
       <label>Mật khẩu<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
       <button disabled={loading}>{loading ? 'Đang đăng nhập' : 'Đăng nhập'}</button>

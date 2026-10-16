@@ -9,6 +9,8 @@ import { parseWorkbook } from '../services/excelService.js';
 import { documentDedupeKey, normalizeDocument, normalizeNhnoReferenceUnit } from '../services/normalizationService.js';
 import { buildConnectionOptions, IMPORT_QUEUE_NAME, type ImportJobData } from './importQueue.js';
 
+import { resolveImportFilePath } from '../utils/fileStorage.js';
+
 type ClassifiedDocument = ReturnType<typeof normalizeDocument> & {
   normalizedUnit: string;
   documentGroup: ReturnType<typeof classifyDocument>['documentGroup'];
@@ -37,14 +39,21 @@ export async function runImportCore(importId: string, progress: ProgressReporter
   }
 
   let buffer: Buffer;
+  let resolvedPath: string;
   try {
-    buffer = await fs.readFile(imported.filePath);
+    resolvedPath = await resolveImportFilePath(
+      imported.filePath,
+      imported.storedFileName,
+      imported.id,
+      imported.createdAt
+    );
+    buffer = await fs.readFile(resolvedPath);
   } catch {
     throw new Error(`Original file missing on disk: ${imported.filePath}`);
   }
 
   await markStatus(importId, { status: 'PROCESSING', processedRows: 0, errorMessage: null });
-  console.log(`[import-worker] importId=${importId} status=PROCESSING, file=${imported.filePath}`);
+  console.log(`[import-worker] importId=${importId} status=PROCESSING, file=${resolvedPath}`);
 
   const parsed = parseWorkbook(buffer);
   console.log(`[import-worker] importId=${importId} parsed rows=${parsed.rows.length}`);

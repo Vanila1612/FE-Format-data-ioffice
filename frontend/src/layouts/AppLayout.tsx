@@ -2,12 +2,12 @@ import { Bell, ClipboardList, Cog, FileSearch, FileSpreadsheet, Gauge, History, 
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../services/auth';
-
+import agribankLogo from "../images/logo-agribank.png";
 type NavItem = { to: string; label: string; icon: any; admin?: boolean };
 type NavGroup = { id: string; label: string; icon: any; items: NavItem[] };
 
 const topNav: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: Gauge, admin: true },
+  { to: '/', label: 'Dashboard', icon: Gauge },
   { to: '/documents', label: 'Danh sách văn bản', icon: FileSearch, admin: true },
   { to: '/import', label: 'Tải lên tài liệu', icon: UploadCloud, admin: true },
   { to: '/reports', label: 'Thống kê', icon: FileSpreadsheet },
@@ -42,7 +42,7 @@ const titles: Record<string, string> = {
   '/import': 'Nhập file Excel',
   '/documents': 'Danh sách văn bản',
   '/reports': 'Thống kê',
-//  '/assistant': 'Trợ lý AI',
+  //  '/assistant': 'Trợ lý AI',
   '/rules': 'Quy tắc phân loại',
   '/unit-mappings': 'Chuẩn hóa đơn vị',
   '/signers': 'Danh sách người ký chính',
@@ -53,12 +53,13 @@ const titles: Record<string, string> = {
 
 function AgribankLogo() {
   return (
-    <svg viewBox="0 0 60 60" width="44" height="44" aria-hidden="true">
-      <rect width="60" height="60" fill="#fff" />
-      <polygon points="0,0 60,60 0,60" fill="#0b8a3e" />
-      <polygon points="0,0 60,60 60,0" fill="#c8102e" />
-      <line x1="0" y1="0" x2="60" y2="60" stroke="#ffd200" strokeWidth="1.5" />
-    </svg>
+    <img
+      src={agribankLogo}
+      alt="Agribank Logo"
+      style={{ objectFit: "contain" }}
+      width={220}
+      height={44}
+    />
   );
 }
 
@@ -84,10 +85,6 @@ export function AppLayout() {
       <aside className="sidebar">
         <div className="brand">
           <AgribankLogo />
-          <div className="brand-text">
-            <strong>AGRIBANK</strong>
-            <small>THEO DÕI KÝ SỐ IOFFCE</small>
-          </div>
         </div>
         <nav>
           {topNav.filter((item) => !item.admin || isAdmin).map((item) => <NavRow key={item.to} to={item.to} label={item.label} Icon={item.icon} end={item.to === '/'} />)}
@@ -113,7 +110,7 @@ export function AppLayout() {
       </aside>
       <div className="workspace">
         <header className="header">
-          <div><p>Rà soát văn bản đi</p><h1>{titles[location.pathname] || 'iOffice'}</h1></div>
+          <div><p>Theo dõi ký số</p><h1>{titles[location.pathname] || 'iOffice'}</h1></div>
           <div className="header-actions"><button aria-label="Thông báo"><Bell size={18} /></button><span>{user?.displayName}</span><button onClick={logout} aria-label="Đăng xuất"><LogOut size={18} /></button></div>
         </header>
         <main><Outlet /></main>

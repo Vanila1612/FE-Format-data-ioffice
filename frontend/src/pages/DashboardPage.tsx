@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, unwrap } from '../services/api';
 import type { Summary, ImportRecord, MonthlyBucket } from '../types/api';
 import { groupLabels, numberText } from '../utils/format';
+import { isCentralOfficeUnit } from '../utils/unitScope';
 import { EmptyState, ErrorState, LoadingState } from '../components/State';
 import {
   Bar,
@@ -25,15 +27,34 @@ export function DashboardPage() {
     queryFn: async () => unwrap<ImportRecord[]>(await api.get('/imports'))
   });
 
+  const data = summary.data;
+  const topSignedUnits = useMemo(() => {
+    if (!data?.byUnit) return [];
+    return data.byUnit
+      .filter((row) => isCentralOfficeUnit(row.unit))
+      .sort((a, b) => b.signed - a.signed)
+      .slice(0, 5);
+  }, [data?.byUnit]);
+  const maxSigned = Math.max(topSignedUnits[0]?.signed || 0, 1);
+
   if (summary.isLoading) return <LoadingState />;
   if (summary.isError) return <ErrorState message={summary.error.message} retry={() => summary.refetch()} />;
-  const data = summary.data!;
+  if (!data) return <EmptyState />;
 
   return <section className="page-stack">
     <KpiGrid total={data.totals.total} signed={data.totals.signed} unsigned={data.totals.unsigned} signRate={data.totals.signRate} />
     <div className="grid-two">
       <div className="panel"><h2>Phân loại</h2>{data.byGroup.map((row) => <MiniBar key={row.key} label={row.label} value={row.total} max={Math.max(data.totals.total, 1)} />)}</div>
-      <div className="panel"><h2>Đơn vị nhiều văn bản</h2>{data.byUnit.length ? data.byUnit.slice(0, 8).map((row) => <MiniBar key={row.unit} label={row.unit} value={row.total} max={data.byUnit[0].total} />) : <EmptyState />}</div>
+      <div className="panel">
+        <h2>Đơn vị ký số nhiều nhất</h2>
+        {topSignedUnits.length ? (
+          topSignedUnits.map((row) => (
+            <MiniBar key={row.unit} label={row.unit} value={row.signed} max={maxSigned} />
+          ))
+        ) : (
+          <EmptyState />
+        )}
+      </div>
     </div>
     <div className="panel"><h2>Tỷ lệ ký số theo tháng</h2><MonthlySignChart months={data.byMonth ?? []} /></div>
     <div className="panel"><h2>Lần nhập gần đây</h2>{imports.data?.length ? <table><tbody>{imports.data.slice(0, 5).map((item) => <tr key={item.id}><td>{item.originalFileName}</td><td>{item.status}</td><td>{numberText(item.successRows)} dòng</td></tr>)}</tbody></table> : <EmptyState />}</div>

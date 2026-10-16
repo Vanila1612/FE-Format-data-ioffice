@@ -8,6 +8,7 @@ import { getImportQueue, hasRedis } from '../jobs/importQueue.js';
 import { processImportInline } from './importInlineFallback.js';
 import { parseWorkbook } from './excelService.js';
 import { documentDedupeKey, normalizeDocument } from './normalizationService.js';
+import { resolveImportFilePath } from '../utils/fileStorage.js';
 
 const allowedExtensions = new Set(['.xlsx', '.xls']);
 const allowedMime = new Set([
@@ -28,12 +29,14 @@ function validateUpload(file: Express.Multer.File) {
 
 async function saveOriginalFile(file: Express.Multer.File, importId: string) {
   const now = new Date();
-  const directory = path.resolve(env.UPLOAD_DIR, String(now.getUTCFullYear()), String(now.getUTCMonth() + 1).padStart(2, '0'), `import-${importId}`);
+  const relDir = path.join(String(now.getUTCFullYear()), String(now.getUTCMonth() + 1).padStart(2, '0'), `import-${importId}`);
+  const directory = path.resolve(env.UPLOAD_DIR, relDir);
   await fs.mkdir(directory, { recursive: true });
   const storedFileName = `${Date.now()}-${sanitizeFileName(file.originalname)}`;
-  const filePath = path.join(directory, storedFileName);
-  await fs.writeFile(filePath, file.buffer);
-  return { storedFileName, filePath };
+  const diskPath = path.join(directory, storedFileName);
+  await fs.writeFile(diskPath, file.buffer);
+  const relativeFilePath = path.join(relDir, storedFileName);
+  return { storedFileName, filePath: relativeFilePath, diskPath };
 }
 
 export async function previewImport(file: Express.Multer.File) {
@@ -49,6 +52,33 @@ export async function enqueueImport(file: Express.Multer.File, uploadedById: str
   validateUpload(file);
   const parsed = parseWorkbook(file.buffer);
   console.log(`[import-enqueue] received file="${file.originalname}" size=${file.size} rows=${parsed.rows.length} uploadedBy=${uploadedById}`);
+
+  // Chặn trùng lặp: nếu file cùng tên và dung lượng đang trong quá trình xử lý
+  const ongoing = await prisma.import.findFirst({
+    where: {
+      originalFileName: file.originalname,
+      fileSize: file.size,
+      status: { in: ['PROCESSING', 'UPLOADED'] }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (ongoing) {
+    throw new AppError(409, 'IMPORT_ALREADY_PROCESSING', 'File này đang trong quá trình xử lý, vui lòng chờ hệ thống hoàn thành.');
+  }
+
+  // Chặn trùng lặp: nếu file cùng tên, cùng dung lượng và cùng số dòng đã lưu thành công trước đó
+  const duplicate = await prisma.import.findFirst({
+    where: {
+      originalFileName: file.originalname,
+      fileSize: file.size,
+      totalRows: parsed.rows.length,
+      status: 'COMPLETED'
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (duplicate) {
+    throw new AppError(409, 'DUPLICATE_IMPORT', 'Dữ liệu file này đã được lưu vào hệ thống trước đó. Vui lòng không lưu lại cùng dữ liệu nếu không có thay đổi.');
+  }
 
   const importRecord = await prisma.import.create({
     data: {
@@ -135,6 +165,17 @@ export async function reprocessImport(importId: string) {
     throw new AppError(404, 'SOURCE_FILE_NOT_FOUND', 'Original import file is no longer available');
   }
 
+  try {
+    await resolveImportFilePath(
+      imported.filePath,
+      imported.storedFileName,
+      imported.id,
+      imported.createdAt
+    );
+  } catch {
+    throw new AppError(404, 'SOURCE_FILE_NOT_FOUND', `Original import file is missing on disk: ${imported.filePath}`);
+  }
+
   // Xóa documents cũ trước khi đẩy lại job (worker giả định insert từ đầu)
   await prisma.document.deleteMany({ where: { importId } });
   await prisma.import.update({
@@ -204,7 +245,17 @@ export async function deleteImport(importId: string) {
 
   // Xóa file đã lưu (nếu là file thật, không phải 'pending')
   if (imported.filePath && imported.filePath !== 'pending') {
-    await fs.rm(imported.filePath, { force: true }).catch(() => undefined);
+    try {
+      const resolved = await resolveImportFilePath(
+        imported.filePath,
+        imported.storedFileName,
+        imported.id,
+        imported.createdAt
+      );
+      await fs.rm(resolved, { force: true }).catch(() => undefined);
+    } catch {
+      // Ignore if file cannot be located or is already deleted
+    }
   }
   return { deleted: true, deletedSnapshots: snapshotIds.length, wasBusy };
 }

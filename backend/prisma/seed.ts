@@ -18,6 +18,20 @@ async function main() {
     }
   });
 
+  await prisma.user.upsert({
+    where: { username: 'user' },
+    update: {
+      displayName: 'Người dùng thử nghiệm',
+      role: UserRole.USER
+    },
+    create: {
+      username: 'user',
+      passwordHash: await bcrypt.hash('user123456', 12),
+      displayName: 'Người dùng thử nghiệm',
+      role: UserRole.USER
+    }
+  });
+
   const rules = [
     { name: 'BC report', keyword: 'BC', documentGroup: DocumentGroup.REPORT_PROPOSAL, priority: 20 },
     { name: 'TTr proposal', keyword: 'TTr', documentGroup: DocumentGroup.REPORT_PROPOSAL, priority: 20 },

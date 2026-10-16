@@ -19,6 +19,9 @@ export function ImportPage() {
   const [result, setResult] = useState<LocalImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savedFileSignature, setSavedFileSignature] = useState<string | null>(null);
+  const isSavingRef = useRef(false);
   const [activeJob, setActiveJob] = useState<{
     importId: string;
     totalRows: number;
@@ -42,6 +45,10 @@ export function ImportPage() {
     queryFn: async () => unwrap<ClassificationRule[]>(await api.get('/rules'))
   });
 
+  function getFileSignature(targetFile: File, totalDocuments?: number): string {
+    return `${targetFile.name}-${targetFile.size}-${targetFile.lastModified}-${totalDocuments ?? 0}`;
+  }
+
   const rows = useMemo(() => {
     const boardRows = result?.boardRows || [];
     return boardRows.filter((row) => {
@@ -60,6 +67,15 @@ export function ImportPage() {
     setFile(nextFile);
     setResult(null);
     if (!nextFile) return;
+
+    const newPrefix = `${nextFile.name}-${nextFile.size}-${nextFile.lastModified}-`;
+    if (savedFileSignature && savedFileSignature.startsWith(newPrefix)) {
+      setIsSaved(true);
+    } else {
+      setIsSaved(false);
+      setActiveJob(null);
+    }
+    isSavingRef.current = false;
 
     setLoading(true);
     try {
@@ -85,6 +101,10 @@ export function ImportPage() {
 
       const parsed = await parseLocalExcel(nextFile, { unitMappings: mappings, rules });
       setResult(parsed);
+      const signatureWithDocs = getFileSignature(nextFile, parsed.documents.length);
+      if (savedFileSignature === signatureWithDocs) {
+        setIsSaved(true);
+      }
       if (parsed.missingColumns.length) {
         toast.error(`Thiếu cột bắt buộc: ${parsed.missingColumns.join(', ')}`);
       } else {
@@ -107,6 +127,9 @@ export function ImportPage() {
     pollingRef.current = null;
     setActiveJob(null);
     setSaving(false);
+    setIsSaved(false);
+    setSavedFileSignature(null);
+    isSavingRef.current = false;
   }
 
   useEffect(() => {
@@ -115,7 +138,7 @@ export function ImportPage() {
     };
   }, []);
 
-  async function pollStatus(importId: string, startedAt: number) {
+  async function pollStatus(importId: string, startedAt: number, signature: string) {
     let errorStreak = 0;
     const stop = () => {
       if (pollingRef.current) { window.clearInterval(pollingRef.current); pollingRef.current = null; }
@@ -144,19 +167,23 @@ export function ImportPage() {
         if (status.status === 'COMPLETED') {
           stop();
           setSaving(false);
+          isSavingRef.current = false;
+          setIsSaved(true);
+          setSavedFileSignature(signature);
           toast.success(`Đã lưu ${status.totalRows} văn bản vào hệ thống`);
-          navigate(`/documents?importId=${importId}`);
           return;
         }
         if (status.status === 'FAILED') {
           stop();
           setSaving(false);
+          isSavingRef.current = false;
           toast.error(status.errorMessage || 'Quá trình nhập dữ liệu thất bại');
           return;
         }
         if (Date.now() - startedAt > 1000 * 60 * 30) {
           stop();
           setSaving(false);
+          isSavingRef.current = false;
           toast.error('Quá thời gian chờ (30 phút). Vui lòng thử lại.');
         }
       } catch (error) {
@@ -172,7 +199,27 @@ export function ImportPage() {
   }
 
   async function saveToDatabase() {
-    if (!file || !result || result.missingColumns.length) return;
+    if (
+      isSavingRef.current ||
+      saving ||
+      isSaved ||
+      activeJob?.status === 'PROCESSING' ||
+      activeJob?.status === 'COMPLETED' ||
+      !file ||
+      !result ||
+      result.missingColumns.length
+    ) {
+      return;
+    }
+
+    const currentSignature = getFileSignature(file, result.documents.length);
+    if (savedFileSignature === currentSignature) {
+      setIsSaved(true);
+      toast.info('Dữ liệu file này đã được lưu vào hệ thống, không có thay đổi để lưu lại.');
+      return;
+    }
+
+    isSavingRef.current = true;
     setSaving(true);
     try {
       const form = new FormData();
@@ -192,17 +239,19 @@ export function ImportPage() {
       });
       // Inline fallback (Redis down) đã xử lý xong ngay trong request — không cần poll.
       if (saved.import.status === 'COMPLETED') {
+        setIsSaved(true);
+        setSavedFileSignature(currentSignature);
         setSaving(false);
+        isSavingRef.current = false;
         toast.success(`Đã lưu ${total} văn bản vào hệ thống`);
-        navigate(`/documents?importId=${saved.import.id}`);
         return;
       }
-      await pollStatus(saved.import.id, startedAt);
+      await pollStatus(saved.import.id, startedAt, currentSignature);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Không thể lưu dữ liệu vào cơ sở dữ liệu');
       setSaving(false);
+      isSavingRef.current = false;
     }
-    // Lưu ý: setSaving(false) sẽ được gọi khi job hoàn tất / lỗi qua setActiveJob
   }
 
   const elapsedSeconds = activeJob ? Math.floor((Date.now() - activeJob.startedAt) / 1000) : 0;
@@ -229,7 +278,39 @@ export function ImportPage() {
       <span>{result.missingColumns.join(', ')}</span>
     </div> : null}
 
-    {result && !result.missingColumns.length && <><div className="toolbar"><button disabled={saving || activeJob?.status === 'PROCESSING' || activeJob?.status === 'COMPLETED'} onClick={saveToDatabase}>{activeJob?.status === 'PROCESSING' ? `Đang lưu ${activeJob.progress}%` : activeJob?.status === 'COMPLETED' ? 'Đã lưu' : saving ? 'Đang upload' : 'Lưu vào hệ thống'}</button><span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span></div>
+    {result && !result.missingColumns.length && <>
+      <div className="toolbar">
+        <button
+          disabled={saving || isSavingRef.current || isSaved || activeJob?.status === 'PROCESSING' || activeJob?.status === 'COMPLETED'}
+          onClick={saveToDatabase}
+          title={isSaved || activeJob?.status === 'COMPLETED' ? 'Dữ liệu file này đã được lưu vào hệ thống' : undefined}
+        >
+          {activeJob?.status === 'PROCESSING'
+            ? `Đang lưu ${activeJob.progress}%`
+            : isSaved || activeJob?.status === 'COMPLETED'
+              ? 'Đã lưu vào hệ thống'
+              : saving
+                ? 'Đang lưu vào hệ thống…'
+                : 'Lưu vào hệ thống'}
+        </button>
+        {isSaved || activeJob?.status === 'COMPLETED' ? (
+          <span style={{ color: 'var(--primary-strong)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span>✓ Dữ liệu file này đã được lưu vào hệ thống. Không thể lưu lại nếu không có thay đổi file.</span>
+            {activeJob?.importId && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => navigate(`/documents?importId=${activeJob.importId}`)}
+                style={{ padding: '6px 12px', fontSize: 13, minHeight: 'auto' }}
+              >
+                Xem danh sách văn bản
+              </button>
+            )}
+          </span>
+        ) : (
+          <span>Mỗi dòng văn bản được lưu nguyên vẹn, kể cả khi có cùng số ký hiệu.</span>
+        )}
+      </div>
       {activeJob && (
         <div className="panel import-progress">
           <div className="import-progress-head">
@@ -324,12 +405,13 @@ const RESULT_IS_TEXT: Record<ResultSortKey, boolean> = {
   totalSigned: false, totalDocuments: false, totalRate: false
 };
 
-export function ResultBoardTable({ rows, search: controlledSearch, onSearchChange, scope: controlledScope, onScopeChange }: {
+export function ResultBoardTable({ rows, search: controlledSearch, onSearchChange, scope: controlledScope, onScopeChange, canChangeScope = true }: {
   rows: ResultBoardRow[];
   search?: string;
   onSearchChange?: (value: string) => void;
   scope?: UnitScope;
   onScopeChange?: (value: UnitScope) => void;
+  canChangeScope?: boolean;
 }) {
   const [sort, setSort] = useState<ResultSortState>({ key: 'stt', dir: 'asc' });
   const [internalSearch, setInternalSearch] = useState('');
@@ -380,11 +462,15 @@ export function ResultBoardTable({ rows, search: controlledSearch, onSearchChang
         aria-label="Tìm đơn vị"
       />
       {search && <button type="button" className="secondary" onClick={() => { setSearch(''); resetPagination(); }}>Xóa</button>}
-      <select value={scope} onChange={(event) => { setScope(event.target.value as UnitScope); resetPagination(); }} aria-label="Lọc chi nhánh">
-        <option value="ALL">Tất cả đơn vị</option>
-        <option value="CENTRAL">Trụ sở chính</option>
-        <option value="BRANCH">Chi nhánh</option>
-      </select>
+      {canChangeScope ? (
+        <select value={scope} onChange={(event) => { setScope(event.target.value as UnitScope); resetPagination(); }} aria-label="Lọc chi nhánh">
+          <option value="ALL">Tất cả đơn vị</option>
+          <option value="CENTRAL">Trụ sở chính</option>
+          <option value="BRANCH">Chi nhánh</option>
+        </select>
+      ) : (
+        <span className="scope-pill">Trụ sở chính</span>
+      )}
       <span className="muted">{numberText(sorted.length)}/{numberText(rows.length)} đơn vị</span>
     </div>
 
